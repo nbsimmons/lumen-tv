@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="privacy_headings">
+        <item>Who we are</item>
+        <item>What Lumen stores</item>
+        <item>Where your data goes</item>
+        <item>What Lumen does not do</item>
+        <item>Security</item>
+        <item>Deleting your data</item>
+        <item>Contact</item>
+    </string-array>
+    <string-array name="privacy_bodies">
+        <item>Lumen is an independent app for watching media from your own Jellyfin server and requesting titles through your own Seerr server. It is not affiliated with or endorsed by the Jellyfin project or Seerr.</item>
+        <item>To keep you signed in, Lumen stores your server addresses, your user name and ID, and the access tokens your servers issue. Tokens are encrypted with a key held in the device\'s secure hardware. Lumen also stores your playback preferences and your last few searches. All of this stays on this device. Lumen never stores your password.</item>
+        <item>Lumen talks only to the Jellyfin and Seerr servers you enter. They receive your sign-in details and what you watch, so they can resume playback and track progress. Artwork from Seerr is loaded from The Movie Database\'s image service (image.tmdb.org), which receives standard request information such as your IP address.</item>
+        <item>Lumen has no account system of its own. It contains no analytics, advertising or tracking, and shares nothing with the developer or any other third party.</item>
+        <item>Use an https:// address for your server where possible. If you use an http:// address, your sign-in details travel over your network unencrypted, and Lumen warns you when this applies.</item>
+        <item>Sign Out in Settings removes your tokens and signs this device out of your server. Disconnect Seerr removes the Seerr session. Uninstalling Lumen deletes everything it stored. Your user accounts live on your own Jellyfin and Seerr servers and are managed by whoever runs them.</item>
+        <item>Questions about this policy: see the contact details on the app\'s Amazon Appstore page.</item>
+    </string-array>
+</resources>

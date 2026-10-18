@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Lumen" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+    <style name="Theme.Lumen.Trailer" parent="Theme.Lumen">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+    <color name="lumen_background">#FF0B0B0F</color>
+</resources>

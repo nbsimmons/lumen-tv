@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="library_count_movies">
+        <item quantity="one">%1$d movie</item>
+        <item quantity="other">%1$d movies</item>
+    </plurals>
+    <plurals name="library_count_shows">
+        <item quantity="one">%1$d show</item>
+        <item quantity="other">%1$d shows</item>
+    </plurals>
+    <plurals name="episode_count">
+        <item quantity="one">%1$d episode</item>
+        <item quantity="other">%1$d episodes</item>
+    </plurals>
+    <plurals name="discover_request_seasons">
+        <item quantity="one">Request %1$d Season</item>
+        <item quantity="other">Request %1$d Seasons</item>
+    </plurals>
+    <plurals name="person_in_library">
+        <item quantity="one">%1$d title in your library</item>
+        <item quantity="other">%1$d titles in your library</item>
+    </plurals>
+</resources>
