@@ -7,6 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import app.lumen.tv.ui.theme.LumenMotion
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -108,6 +110,10 @@ private fun MainShell() {
                 navController = navController,
                 startDestination = TopDestination.Home.route,
                 modifier = Modifier.focusRequester(contentFocus).focusGroup(),
+                enterTransition = { fadeIn(tween(LumenMotion.Medium, delayMillis = LumenMotion.Fast / 2, easing = LumenMotion.Standard)) },
+                exitTransition = { fadeOut(tween(LumenMotion.Fast)) },
+                popEnterTransition = { fadeIn(tween(LumenMotion.Medium, delayMillis = LumenMotion.Fast / 2, easing = LumenMotion.Standard)) },
+                popExitTransition = { fadeOut(tween(LumenMotion.Fast)) },
             ) {
                 composable(TopDestination.Home.route) { HomeScreen(onOpenItem = openItem) }
                 composable(TopDestination.Movies.route) { LibraryScreen(kind = MediaKind.Movie, onOpenItem = openItem) }
