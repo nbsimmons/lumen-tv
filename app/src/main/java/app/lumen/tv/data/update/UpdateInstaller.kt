@@ -5,5 +5,5 @@ import java.io.File
 interface UpdateInstaller {
     fun canInstall(): Boolean
     fun openPermissionSettings()
-    suspend fun install(apk: File)
+    suspend fun install(apk: File, profile: File?)
 }

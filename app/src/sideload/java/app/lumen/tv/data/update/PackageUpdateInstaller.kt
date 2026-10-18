@@ -36,16 +36,22 @@ class PackageUpdateInstaller(private val context: Context) : UpdateInstaller {
         }
     }
 
-    override suspend fun install(apk: File) = withContext(Dispatchers.IO) {
+    override suspend fun install(apk: File, profile: File?) = withContext(Dispatchers.IO) {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(context.packageName)
         }
         val sessionId = installer.createSession(params)
         installer.openSession(sessionId).use { session ->
-            session.openWrite("lumen.apk", 0, apk.length()).use { output ->
+            session.openWrite("base.apk", 0, apk.length()).use { output ->
                 apk.inputStream().use { it.copyTo(output) }
                 session.fsync(output)
+            }
+            if (profile != null) {
+                session.openWrite("base.dm", 0, profile.length()).use { output ->
+                    profile.inputStream().use { it.copyTo(output) }
+                    session.fsync(output)
+                }
             }
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0

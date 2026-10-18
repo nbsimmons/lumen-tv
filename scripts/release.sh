@@ -41,5 +41,23 @@ if [[ -n "$notes" ]]; then
     notes_args=(--notes "$(cat "$notes")"$'\n\n'"SHA-256: \`$sha\`")
 fi
 
-gh release create "v$version" "$out" --repo "$repo" --title "Lumen $version" "${notes_args[@]}"
+stable="$root/dist/lumen-sideload.apk"
+cp "$out" "$stable"
+
+profiles=()
+profile_dir="$root/app/build/outputs/apk/sideload/release"
+while IFS=$'\t' read -r min path; do
+    [[ -n "$path" ]] || continue
+    name="lumen-$version-sideload-api$min.dm"
+    cp "$profile_dir/$path" "$root/dist/$name"
+    profiles+=("$root/dist/$name")
+done < <(python3 - "$profile_dir/output-metadata.json" <<'PY'
+import json, sys
+for entry in json.load(open(sys.argv[1])).get("baselineProfiles", []):
+    print("%s\t%s" % (entry["minApi"], entry["baselineProfiles"][0]))
+PY
+)
+
+gh release create "v$version" "$out" "$stable" "${profiles[@]}" --repo "$repo" --title "Lumen $version" "${notes_args[@]}"
+echo "Stable link: https://github.com/$repo/releases/latest/download/lumen-sideload.apk"
 echo "Published v$version (versionCode $next_code). Commit gradle.properties to record the bump."

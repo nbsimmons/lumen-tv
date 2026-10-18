@@ -25,7 +25,7 @@ import java.io.File
 import java.security.MessageDigest
 import java.time.Duration
 
-data class Release(val version: String, val notes: String?, val url: String, val size: Long)
+data class Release(val version: String, val notes: String?, val url: String, val size: Long, val profileUrl: String? = null)
 
 sealed interface UpdateState {
     data object Idle : UpdateState
@@ -125,8 +125,9 @@ class UpdateRepository(
             runCatching {
                 val apk = fetch(release)
                 check(isTrusted(apk)) { "Signature mismatch" }
+                val profile = release.profileUrl?.let { url -> runCatching { fetchProfile(url, apk.parentFile!!) }.getOrNull() }
                 _state.value = UpdateState.Installing(release)
-                installer.install(apk)
+                installer.install(apk, profile)
             }.onFailure { if (it !is kotlinx.coroutines.CancellationException) _state.value = UpdateState.Failed(release) }
         }
     }
@@ -161,7 +162,8 @@ class UpdateRepository(
             check(response.isSuccessful) { "GitHub returned ${response.code}" }
             val body = json.decodeFromString<GitHubRelease>(response.body.string())
             val asset = body.assets.firstOrNull { it.name.endsWith(APK_SUFFIX) } ?: return@withContext null
-            Release(body.tag.removePrefix("v"), body.body?.let(::plainNotes)?.takeIf { it.isNotBlank() }, asset.url, asset.size)
+            val profile = profileSuffix()?.let { suffix -> body.assets.firstOrNull { it.name.endsWith(suffix) } }
+            Release(body.tag.removePrefix("v"), body.body?.let(::plainNotes)?.takeIf { it.isNotBlank() }, asset.url, asset.size, profile?.url)
         }
     }
 
@@ -196,6 +198,21 @@ class UpdateRepository(
             }
         }
         target
+    }
+
+    private suspend fun fetchProfile(url: String, dir: File): File = withContext(Dispatchers.IO) {
+        val target = File(dir, "lumen.dm")
+        http.newCall(Request.Builder().url(url).build()).execute().use { response ->
+            check(response.isSuccessful) { "Profile returned ${response.code}" }
+            response.body.byteStream().use { input -> target.outputStream().use { input.copyTo(it) } }
+        }
+        target
+    }
+
+    private fun profileSuffix(): String? = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> "-sideload-api31.dm"
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.P -> "-sideload-api28.dm"
+        else -> null
     }
 
     private fun isTrusted(apk: File): Boolean {
