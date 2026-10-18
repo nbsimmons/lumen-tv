@@ -161,7 +161,7 @@ class UpdateRepository(
             check(response.isSuccessful) { "GitHub returned ${response.code}" }
             val body = json.decodeFromString<GitHubRelease>(response.body.string())
             val asset = body.assets.firstOrNull { it.name.endsWith(APK_SUFFIX) } ?: return@withContext null
-            Release(body.tag.removePrefix("v"), body.body?.takeIf { it.isNotBlank() }, asset.url, asset.size)
+            Release(body.tag.removePrefix("v"), body.body?.let(::plainNotes)?.takeIf { it.isNotBlank() }, asset.url, asset.size)
         }
     }
 
@@ -236,6 +236,20 @@ class UpdateRepository(
 
         @Suppress("DEPRECATION")
         val SIGNATURE_FLAGS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
+
+        fun plainNotes(markdown: String): String = markdown.lineSequence()
+            .filterNot { it.trimStart().startsWith("SHA-256") }
+            .map { line ->
+                line.trimEnd()
+                    .replace(Regex("^#+\\s*"), "")
+                    .replace(Regex("^\\s*[-*]\\s+"), "• ")
+                    .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1")
+                    .replace("**", "")
+                    .replace("`", "")
+            }
+            .joinToString("\n")
+            .replace(Regex("\n{3,}"), "\n\n")
+            .trim()
 
         fun compare(a: String, b: String): Int {
             val left = a.split('.', '-').map { it.toIntOrNull() ?: 0 }
