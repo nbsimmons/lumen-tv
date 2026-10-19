@@ -35,8 +35,17 @@ android {
         }
     }
 
-    flavorDimensions += "distribution"
+    flavorDimensions += listOf("distribution", "platform")
     productFlavors {
+        create("modern") {
+            dimension = "platform"
+            buildConfigField("String", "UPDATE_ASSET", "\"-sideload.apk\"")
+        }
+        create("legacy") {
+            dimension = "platform"
+            minSdk = 22
+            buildConfigField("String", "UPDATE_ASSET", "\"-legacy.apk\"")
+        }
         create("sideload") {
             dimension = "distribution"
             buildConfigField("boolean", "NATIVE_TRAILERS", "true")
@@ -82,7 +91,8 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
 
-    implementation(platform(libs.compose.bom))
+    "modernImplementation"(platform(libs.compose.bom))
+    "legacyImplementation"(platform(libs.compose.bom.legacy))
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
     implementation(libs.compose.ui.tooling.preview)
@@ -109,4 +119,33 @@ dependencies {
     implementation(libs.media3.ui.compose)
 
     "sideloadImplementation"(libs.newpipe.extractor)
+}
+
+androidComponents {
+    beforeVariants { variant ->
+        if (variant.productFlavors.containsAll(listOf("distribution" to "store", "platform" to "legacy"))) variant.enable = false
+    }
+}
+
+val legacyPins = mapOf(
+    "androidx.tv" to "1.0.1",
+    "androidx.navigation" to "2.9.8",
+    "androidx.media3" to "1.8.1",
+    "androidx.activity" to "1.11.0",
+    "androidx.lifecycle" to "2.9.4",
+    "androidx.datastore" to "1.1.7",
+    "io.coil-kt.coil3" to "3.4.0",
+    "io.insert-koin" to "4.1.1",
+)
+val legacyModulePins = mapOf(
+    "androidx.core:core" to "1.17.0",
+    "androidx.core:core-ktx" to "1.17.0",
+)
+
+configurations.configureEach {
+    if (!name.contains("Legacy")) return@configureEach
+    resolutionStrategy.eachDependency {
+        val module = "${requested.group}:${requested.name}"
+        (legacyModulePins[module] ?: legacyPins[requested.group])?.let { useVersion(it) }
+    }
 }

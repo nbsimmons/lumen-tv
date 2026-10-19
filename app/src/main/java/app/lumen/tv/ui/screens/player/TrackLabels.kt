@@ -1,5 +1,6 @@
 package app.lumen.tv.ui.screens.player
 
+import androidx.core.os.ConfigurationCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
@@ -39,7 +40,7 @@ fun subtitleLabel(format: Format): String {
 
 @Composable
 private fun languageName(format: Format): String {
-    val locale = LocalConfiguration.current.locales[0]
+    val locale = ConfigurationCompat.getLocales(LocalConfiguration.current)[0] ?: Locale.ENGLISH
     val tag = format.language?.takeIf { it.isNotBlank() && it != C.LANGUAGE_UNDETERMINED }
     return tag?.let { Locale.forLanguageTag(it).getDisplayLanguage(locale).ifBlank { null } }
         ?: format.label

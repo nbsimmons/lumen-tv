@@ -161,7 +161,7 @@ class UpdateRepository(
             if (response.code == 404) return@withContext null
             check(response.isSuccessful) { "GitHub returned ${response.code}" }
             val body = json.decodeFromString<GitHubRelease>(response.body.string())
-            val asset = body.assets.firstOrNull { it.name.endsWith(APK_SUFFIX) } ?: return@withContext null
+            val asset = body.assets.firstOrNull { it.name.endsWith(BuildConfig.UPDATE_ASSET) } ?: return@withContext null
             val profile = profileSuffix()?.let { suffix -> body.assets.firstOrNull { it.name.endsWith(suffix) } }
             Release(body.tag.removePrefix("v"), body.body?.let(::plainNotes)?.takeIf { it.isNotBlank() }, asset.url, asset.size, profile?.url)
         }
@@ -247,7 +247,6 @@ class UpdateRepository(
     }
 
     private companion object {
-        const val APK_SUFFIX = "-sideload.apk"
         const val BUFFER = 64 * 1024
         val CHECK_INTERVAL: Duration = Duration.ofHours(6)
 

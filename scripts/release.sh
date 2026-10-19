@@ -21,43 +21,52 @@ next_code=$((current_code + 1))
 sed -i '' "s/^lumen.versionName=.*/lumen.versionName=$version/; s/^lumen.versionCode=.*/lumen.versionCode=$next_code/" "$props"
 
 export JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}"
-(cd "$root" && ./gradlew -q clean assembleSideloadRelease)
+(cd "$root" && ./gradlew -q clean assembleSideloadModernRelease assembleSideloadLegacyRelease)
 
-apk="$root/app/build/outputs/apk/sideload/release/app-sideload-release.apk"
 build_tools="$(ls -d "${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"/build-tools/* | tail -1)"
-signer="$("$build_tools/apksigner" verify --print-certs "$apk" | grep 'certificate DN')"
-if [[ "$signer" == *"Android Debug"* ]]; then
-    echo "Refusing to publish a debug-signed build" >&2
-    exit 1
-fi
+modern_dir="$root/app/build/outputs/apk/sideloadModern/release"
+legacy_dir="$root/app/build/outputs/apk/sideloadLegacy/release"
+modern_apk="$modern_dir/app-sideload-modern-release.apk"
+legacy_apk="$legacy_dir/app-sideload-legacy-release.apk"
+for apk in "$modern_apk" "$legacy_apk"; do
+    signer="$("$build_tools/apksigner" verify --print-certs "$apk" | grep 'certificate DN')"
+    if [[ "$signer" == *"Android Debug"* ]]; then
+        echo "Refusing to publish a debug-signed build" >&2
+        exit 1
+    fi
+done
 
-out="$root/dist/lumen-$version-sideload.apk"
 mkdir -p "$root/dist"
-cp "$apk" "$out"
+out="$root/dist/lumen-$version-sideload.apk"
+legacy_out="$root/dist/lumen-$version-legacy.apk"
+cp "$modern_apk" "$out"
+cp "$legacy_apk" "$legacy_out"
+cp "$modern_apk" "$root/dist/lumen-sideload.apk"
+cp "$legacy_apk" "$root/dist/lumen-legacy.apk"
 sha="$(shasum -a 256 "$out" | cut -d' ' -f1)"
+legacy_sha="$(shasum -a 256 "$legacy_out" | cut -d' ' -f1)"
 
-notes_args=(--notes "SHA-256: \`$sha\`")
+checksums="SHA-256 (Fire OS 6+ / Android TV): \`$sha\`"$'\n'"SHA-256 (Fire OS 5 legacy): \`$legacy_sha\`"
+notes_args=(--notes "$checksums")
 if [[ -n "$notes" ]]; then
-    notes_args=(--notes "$(cat "$notes")"$'\n\n'"SHA-256: \`$sha\`")
+    notes_args=(--notes "$(cat "$notes")"$'\n\n'"$checksums")
 fi
-
-stable="$root/dist/lumen-sideload.apk"
-cp "$out" "$stable"
 
 profiles=()
-profile_dir="$root/app/build/outputs/apk/sideload/release"
 while IFS=$'\t' read -r min path; do
     [[ -n "$path" ]] || continue
     name="lumen-$version-sideload-api$min.dm"
-    cp "$profile_dir/$path" "$root/dist/$name"
+    cp "$modern_dir/$path" "$root/dist/$name"
     profiles+=("$root/dist/$name")
-done < <(python3 - "$profile_dir/output-metadata.json" <<'PY'
+done < <(python3 - "$modern_dir/output-metadata.json" <<'PY'
 import json, sys
 for entry in json.load(open(sys.argv[1])).get("baselineProfiles", []):
     print("%s\t%s" % (entry["minApi"], entry["baselineProfiles"][0]))
 PY
 )
 
-gh release create "v$version" "$out" "$stable" "${profiles[@]}" --repo "$repo" --title "Lumen $version" "${notes_args[@]}"
-echo "Stable link: https://github.com/$repo/releases/latest/download/lumen-sideload.apk"
+gh release create "v$version" "$out" "$legacy_out" "$root/dist/lumen-sideload.apk" "$root/dist/lumen-legacy.apk" "${profiles[@]}" \
+    --repo "$repo" --title "Lumen $version" "${notes_args[@]}"
+echo "Stable links: https://github.com/$repo/releases/latest/download/lumen-sideload.apk (Fire OS 6+ / Android TV)"
+echo "              https://github.com/$repo/releases/latest/download/lumen-legacy.apk (Fire OS 5)"
 echo "Published v$version (versionCode $next_code). Commit gradle.properties to record the bump."

@@ -1,5 +1,6 @@
 package app.lumen.tv.ui.screens.player
 
+import android.content.Context
 import android.graphics.Color as AndroidColor
 import android.view.KeyEvent
 import app.lumen.tv.data.livetv.Channel
@@ -82,8 +83,6 @@ import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.SubtitleView
-import androidx.media3.ui.compose.ContentFrame
-import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -296,12 +295,7 @@ fun PlayerScreen(
             }
             .focusable(),
     ) {
-        ContentFrame(
-            player = player,
-            modifier = Modifier.fillMaxSize(),
-            surfaceType = SURFACE_TYPE_SURFACE_VIEW,
-            contentScale = ContentScale.Fit,
-        )
+        VideoSurface(player = player, modifier = Modifier.fillMaxSize())
         Subtitles(player, overlayVisible)
         state.liveChannel?.takeIf { it.isRadio }?.let { station -> RadioCard(station, state.liveGuide, Modifier.align(Alignment.Center)) }
 
@@ -391,7 +385,7 @@ private fun Subtitles(player: Player, overlayVisible: Boolean) {
     AndroidView(
         factory = { context ->
             SubtitleView(context).apply {
-                val captioning = context.getSystemService(CaptioningManager::class.java)
+                val captioning = context.getSystemService(Context.CAPTIONING_SERVICE) as? CaptioningManager
                 if (captioning?.isEnabled == true) {
                     setUserDefaultStyle()
                     setUserDefaultTextSize()

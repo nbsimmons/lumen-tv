@@ -48,7 +48,7 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val appModule = module {
-    single { SecureCipher() }
+    single { SecureCipher(androidContext()) }
     single { SessionStore(androidContext(), get()) }
     single { SettingsStore(androidContext()) }
     single { HomeCache(androidContext()) }

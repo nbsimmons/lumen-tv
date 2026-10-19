@@ -1,5 +1,6 @@
 package app.lumen.tv.playback
 
+import android.os.Build
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.media.MediaCodecList
@@ -123,12 +124,16 @@ class DeviceProfileFactory(private val context: Context) {
         }
 
         @Suppress("DEPRECATION")
-        val hdrTypes = context.getSystemService(DisplayManager::class.java)
-            ?.getDisplay(Display.DEFAULT_DISPLAY)
-            ?.hdrCapabilities
-            ?.supportedHdrTypes
-            ?.toSet()
-            .orEmpty()
+        val hdrTypes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            (context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager)
+                ?.getDisplay(Display.DEFAULT_DISPLAY)
+                ?.hdrCapabilities
+                ?.supportedHdrTypes
+                ?.toSet()
+                .orEmpty()
+        } else {
+            emptySet()
+        }
         val dolbyVisionDecoder = decoders.any { it.startsWith("video/dolby-vision") }
         val ranges = buildList {
             add("SDR")
