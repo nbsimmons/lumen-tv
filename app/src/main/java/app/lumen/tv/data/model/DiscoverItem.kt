@@ -1,5 +1,6 @@
 package app.lumen.tv.data.model
 
+import kotlinx.serialization.Serializable
 import java.util.UUID
 
 enum class DiscoverKind { Movie, Series }
@@ -37,7 +38,20 @@ data class DiscoverDetail(
     val certification: String? = null,
     val studio: String? = null,
     val cast: List<DiscoverCast> = emptyList(),
+    val collection: CollectionRef? = null,
 )
+
+@Serializable
+data class CollectionRef(val tmdbId: Int, val name: String, val posterUrl: String?, val backdropUrl: String?)
+
+data class MovieCollection(
+    val ref: CollectionRef,
+    val overview: String?,
+    val parts: List<DiscoverItem>,
+) {
+    val missing: List<DiscoverItem> get() = parts.filter { it.availability == Availability.None }
+    val available: Int get() = parts.count { it.availability == Availability.Available || it.availability == Availability.PartiallyAvailable }
+}
 
 data class DiscoverCast(val tmdbId: Int, val name: String, val role: String?, val imageUrl: String?)
 

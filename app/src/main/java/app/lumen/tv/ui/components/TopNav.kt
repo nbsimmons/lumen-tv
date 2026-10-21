@@ -31,6 +31,7 @@ enum class TopDestination(val route: String, @StringRes val label: Int, val show
     Home("home", R.string.nav_home),
     Movies("movies", R.string.nav_movies),
     Shows("shows", R.string.nav_shows),
+    Collections("collections", R.string.nav_collections),
     LiveTv("live", R.string.nav_live_tv, shown = false),
     Discover("discover", R.string.nav_discover),
     Search("search", R.string.nav_search),

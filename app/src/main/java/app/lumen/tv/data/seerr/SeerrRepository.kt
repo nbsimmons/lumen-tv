@@ -2,6 +2,8 @@ package app.lumen.tv.data.seerr
 
 import app.lumen.tv.data.jellyfin.JellyfinClient
 import app.lumen.tv.data.model.Availability
+import app.lumen.tv.data.model.CollectionRef
+import app.lumen.tv.data.model.MovieCollection
 import app.lumen.tv.data.model.DiscoverCast
 import app.lumen.tv.data.model.DiscoverDetail
 import app.lumen.tv.data.model.DiscoverItem
@@ -285,6 +287,7 @@ class SeerrRepository(
             tvdbId = details.externalIds?.tvdbId,
             trailer = trailerOf(details),
             certification = certificationOf(details),
+            collection = details.collection?.let(::collectionRef),
             studio = (details.networks ?: details.productionCompanies).orEmpty().firstNotNullOfOrNull { it.name?.takeIf(String::isNotBlank) },
             cast = details.credits?.cast.orEmpty().take(MAX_CAST).mapNotNull { member ->
                 member.name?.let { DiscoverCast(member.id, it, member.character?.takeIf(String::isNotBlank), member.profilePath?.let { path -> PROFILE + path }) }
@@ -294,6 +297,50 @@ class SeerrRepository(
 
     suspend fun status(kind: DiscoverKind, tmdbId: Int): Availability? =
         runCatching { detail(kind, tmdbId).item.availability }.getOrNull()
+
+    suspend fun collectionOf(movieTmdbId: Int): CollectionRef? =
+        detailsFor(DiscoverKind.Movie, movieTmdbId).collection?.let(::collectionRef)
+
+    suspend fun collection(tmdbId: Int): MovieCollection {
+        val body = authed<SeerrCollection>("collection/$tmdbId")
+        val parts = body.parts
+            .mapNotNull { toItem(it.copy(mediaType = it.mediaType ?: "movie")) }
+            .sortedWith(compareBy(nullsLast()) { it.year })
+        return MovieCollection(
+            ref = CollectionRef(body.id, body.name.orEmpty(), body.posterPath?.let { POSTER + it }, body.backdropPath?.let { BACKDROP + it }),
+            overview = body.overview?.takeIf { it.isNotBlank() },
+            parts = parts,
+        )
+    }
+
+    suspend fun requestMovies(tmdbIds: List<Int>, choice: RequestChoice?): Int {
+        var sent = 0
+        for (id in tmdbIds) {
+            val server = choice?.server
+            val ok = runCatching {
+                authedPost(
+                    "request",
+                    SeerrCreateRequest(
+                        mediaType = "movie",
+                        mediaId = id,
+                        is4k = server?.is4k,
+                        serverId = server?.id,
+                        profileId = choice?.profileId,
+                        rootFolder = server?.rootFolder,
+                    ),
+                )
+            }.isSuccess
+            if (ok) {
+                requested += DiscoverKind.Movie to id
+                sent++
+            }
+        }
+        if (sent > 0) _changes.tryEmit(Unit)
+        return sent
+    }
+
+    private fun collectionRef(ref: SeerrCollectionRef) =
+        CollectionRef(ref.id, ref.name.orEmpty(), ref.posterPath?.let { POSTER + it }, ref.backdropPath?.let { BACKDROP + it })
 
     suspend fun recommendations(kind: DiscoverKind, tmdbId: Int): List<DiscoverItem> {
         val path = if (kind == DiscoverKind.Movie) "movie/$tmdbId/recommendations" else "tv/$tmdbId/recommendations"

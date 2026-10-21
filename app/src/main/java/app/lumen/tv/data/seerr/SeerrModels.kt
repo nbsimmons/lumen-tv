@@ -80,10 +80,24 @@ data class SeerrDetails(
     val relatedVideos: List<SeerrVideo>? = null,
     val imdbId: String? = null,
     val credits: SeerrDetailCredits? = null,
+    val collection: SeerrCollectionRef? = null,
     val releases: SeerrReleases? = null,
     val contentRatings: SeerrContentRatings? = null,
     val networks: List<SeerrCompany>? = null,
     val productionCompanies: List<SeerrCompany>? = null,
+)
+
+@Serializable
+data class SeerrCollectionRef(val id: Int, val name: String? = null, val posterPath: String? = null, val backdropPath: String? = null)
+
+@Serializable
+data class SeerrCollection(
+    val id: Int,
+    val name: String? = null,
+    val overview: String? = null,
+    val posterPath: String? = null,
+    val backdropPath: String? = null,
+    val parts: List<SeerrResult> = emptyList(),
 )
 
 @Serializable

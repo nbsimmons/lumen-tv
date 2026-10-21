@@ -43,6 +43,8 @@ import app.lumen.tv.ui.screens.detail.DetailScreen
 import app.lumen.tv.ui.screens.discover.DiscoverDetailScreen
 import app.lumen.tv.ui.screens.discover.DiscoverScreen
 import app.lumen.tv.ui.screens.search.SearchScreen
+import app.lumen.tv.ui.screens.collections.CollectionScreen
+import app.lumen.tv.ui.screens.collections.CollectionsScreen
 import app.lumen.tv.ui.screens.person.PersonScreen
 import app.lumen.tv.ui.screens.person.PersonRef
 import app.lumen.tv.ui.screens.settings.PrivacyScreen
@@ -93,6 +95,10 @@ private fun MainShell() {
     val contentFocus = remember { FocusRequester() }
     val openItem: (MediaItem) -> Unit = { item -> navController.navigate(detailRoute(item)) }
     val openDiscover: (DiscoverItem) -> Unit = { item -> navController.navigate("discover/${item.kind.name}/${item.tmdbId}") }
+    val openFilm: (DiscoverItem) -> Unit = { item ->
+        navController.navigate(item.jellyfinId?.let { "item/$it" } ?: "discover/${item.kind.name}/${item.tmdbId}")
+    }
+    val openCollection: (Int, Boolean) -> Unit = { id, request -> navController.navigate("collection/$id?request=$request") }
     val play: (MediaItem, Long) -> Unit = { item, ticks -> navController.navigate("play/${item.id}?start=$ticks") }
     val context = LocalContext.current
     val playTrailer: (Trailer, String, String?) -> Unit = { trailer, title, backdrop ->
@@ -118,6 +124,23 @@ private fun MainShell() {
                 composable(TopDestination.Home.route) { HomeScreen(onOpenItem = openItem) }
                 composable(TopDestination.Movies.route) { LibraryScreen(kind = MediaKind.Movie, onOpenItem = openItem) }
                 composable(TopDestination.Shows.route) { LibraryScreen(kind = MediaKind.Series, onOpenItem = openItem) }
+                composable(TopDestination.Collections.route) { CollectionsScreen(onOpenCollection = { id -> openCollection(id, false) }) }
+                composable(
+                    route = "collection/{id}?request={request}",
+                    arguments = listOf(
+                        navArgument("id") { type = NavType.IntType },
+                        navArgument("request") {
+                            type = NavType.BoolType
+                            defaultValue = false
+                        },
+                    ),
+                ) { entry ->
+                    CollectionScreen(
+                        tmdbId = entry.arguments?.getInt("id") ?: 0,
+                        openRequest = entry.arguments?.getBoolean("request") ?: false,
+                        onOpen = openFilm,
+                    )
+                }
                 composable(TopDestination.LiveTv.route) { LiveTvScreen(onWatch = { channel -> navController.navigate("watch/${channel.key}") }) }
                 composable("watch/{key}", arguments = listOf(navArgument("key") { type = NavType.StringType })) { entry ->
                     PlayerScreen(
@@ -204,6 +227,8 @@ private fun MainShell() {
                         tmdbId = entry.arguments?.getInt("tmdbId") ?: 0,
                         onWatch = { id -> navController.navigate("item/$id") },
                         onTrailer = playTrailer,
+                        onOpenCollection = openCollection,
+                        onOpenFilm = openFilm,
                         onOpenPerson = { tmdb -> navController.navigate("person?tmdb=$tmdb") },
                         onOpenDiscover = { item ->
                             navController.navigate(item.jellyfinId?.let { "item/$it" } ?: "discover/${item.kind.name}/${item.tmdbId}")
@@ -231,6 +256,8 @@ private fun MainShell() {
                         onOpenItem = openItem,
                         onTrailer = playTrailer,
                         onOpenPerson = { personId -> navController.navigate("person?jf=$personId") },
+                        onOpenFilm = openFilm,
+                        onOpenCollection = openCollection,
                     )
                 }
                 composable(

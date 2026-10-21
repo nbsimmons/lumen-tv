@@ -6,6 +6,15 @@
     <string name="nav_shows">TV Shows</string>
     <string name="nav_discover">Discover</string>
     <string name="nav_search">Search</string>
+    <string name="nav_collections">Collections</string>
+    <string name="collection_films">Films</string>
+    <string name="collection_all_films">All missing films</string>
+    <string name="collection_in_library">%1$d of %2$d in your library</string>
+    <string name="collection_view">View Collection</string>
+    <string name="collection_request_all">Request Collection</string>
+    <string name="collection_all_requested">Every film requested or available</string>
+    <string name="collections_loading">Finding the collections your films belong to…</string>
+    <string name="collections_empty">None of your films belong to a collection yet.</string>
     <string name="nav_settings">Settings</string>
 
     <string name="onboarding_welcome">Welcome to Lumen</string>

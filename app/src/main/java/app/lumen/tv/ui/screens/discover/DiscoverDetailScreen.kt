@@ -75,8 +75,11 @@ import app.lumen.tv.ui.components.AvailabilityBadge
 import app.lumen.tv.ui.components.CardShape
 import app.lumen.tv.ui.components.CastEntry
 import app.lumen.tv.ui.components.CastRow
+import app.lumen.tv.ui.components.CollectionShelf
 import app.lumen.tv.ui.components.LumenCard
 import app.lumen.tv.ui.components.ShelfRow
+import app.lumen.tv.ui.components.SheetHeading
+import app.lumen.tv.ui.components.SheetRow
 import app.lumen.tv.ui.components.TitleLogo
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -94,6 +97,8 @@ fun DiscoverDetailScreen(
     onTrailer: (Trailer, String, String?) -> Unit,
     onOpenPerson: (Int) -> Unit,
     onOpenDiscover: (DiscoverItem) -> Unit,
+    onOpenFilm: (DiscoverItem) -> Unit,
+    onOpenCollection: (Int, Boolean) -> Unit,
     onBack: () -> Unit,
     viewModel: DiscoverDetailViewModel = koinViewModel(key = "discover-$kind-$tmdbId") { parametersOf(kind, tmdbId) },
 ) {
@@ -154,6 +159,16 @@ fun DiscoverDetailScreen(
                         CastRow(
                             people = detail.cast.map { CastEntry(it.tmdbId.toString(), it.name, it.role, it.imageUrl) },
                             onOpen = { entry -> entry.key.toIntOrNull()?.let(onOpenPerson) },
+                        )
+                    }
+                }
+                state.collection?.let { collection ->
+                    item(key = "collection") {
+                        CollectionShelf(
+                            collection = collection,
+                            currentTmdbId = detail.item.tmdbId,
+                            onOpenFilm = onOpenFilm,
+                            onOpenCollection = { request -> onOpenCollection(collection.ref.tmdbId, request) },
                         )
                     }
                 }
@@ -418,50 +433,5 @@ private fun RequestSheet(detail: DiscoverDetail, state: DiscoverDetailState, vie
             enabled = !state.requesting && (!isSeries || state.selectedSeasons.isNotEmpty()),
             modifier = Modifier.fillMaxWidth().then(focusFor("confirm")),
         )
-    }
-}
-
-@Composable
-private fun SheetHeading(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelMedium,
-        color = LumenColors.OnSurfaceFaint,
-        modifier = Modifier.padding(start = LumenSpacing.M, top = LumenSpacing.M, bottom = LumenSpacing.XS),
-    )
-}
-
-@Composable
-private fun SheetRow(
-    label: String,
-    checked: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    detail: String? = null,
-    enabled: Boolean = true,
-    detailColor: Color = LumenColors.OnSurfaceFaint,
-) {
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.fillMaxWidth(),
-        shape = ClickableSurfaceDefaults.shape(LumenShapes.Card),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.Transparent,
-            contentColor = LumenColors.OnSurface,
-            focusedContainerColor = LumenColors.FocusFill,
-            focusedContentColor = LumenColors.OnFocusFill,
-            disabledContainerColor = Color.Transparent,
-            disabledContentColor = LumenColors.OnSurfaceFaint,
-        ),
-    ) {
-        Row(Modifier.padding(horizontal = LumenSpacing.M, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(26.dp)) {
-                if (checked) Icon(painterResource(R.drawable.ic_check), contentDescription = null, modifier = Modifier.size(18.dp))
-            }
-            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            detail?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = detailColor) }
-        }
     }
 }

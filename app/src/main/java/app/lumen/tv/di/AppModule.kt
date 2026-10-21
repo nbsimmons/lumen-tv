@@ -4,6 +4,9 @@ import app.lumen.tv.data.discovery.LocalDiscovery
 import app.lumen.tv.DeviceClass
 import app.lumen.tv.StartupWork
 import app.lumen.tv.data.jellyfin.HomeCache
+import app.lumen.tv.data.collections.CollectionIndex
+import app.lumen.tv.ui.screens.collections.CollectionViewModel
+import app.lumen.tv.ui.screens.collections.CollectionsViewModel
 import app.lumen.tv.data.jellyfin.JellyfinClient
 import app.lumen.tv.data.jellyfin.JellyfinRepository
 import app.lumen.tv.data.session.SecureCipher
@@ -53,6 +56,7 @@ val appModule = module {
     single { SettingsStore(androidContext()) }
     single { HomeCache(androidContext()) }
     single { UpdateRepository(androidContext(), get(), get(), createUpdateInstaller(androidContext())) }
+    single { CollectionIndex(androidContext(), get(), get()) }
     single { StartupWork(get(), get(), get(), get()) }
     single { JellyfinClient(androidContext(), get(), get(), get()) }
     single { JellyfinRepository(get(), get()) }
@@ -88,6 +92,8 @@ val appModule = module {
     viewModel { LiveTvViewModel(get(), get()) }
     viewModel { DiscoverViewModel(get(), get()) }
     viewModel { SeerrConnectViewModel(get(), get(), get()) }
+    viewModel { CollectionsViewModel(get(), get()) }
+    viewModel { (tmdbId: Int, openRequest: Boolean) -> CollectionViewModel(tmdbId, openRequest, get()) }
     viewModel { (kind: DiscoverKind, tmdbId: Int) -> DiscoverDetailViewModel(kind, tmdbId, get(), get()) }
     viewModel { SearchViewModel(get(), get(), get()) }
     viewModel { (ref: PersonRef) -> PersonViewModel(ref, get(), get()) }

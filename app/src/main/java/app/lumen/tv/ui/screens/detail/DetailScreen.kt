@@ -55,6 +55,8 @@ import app.lumen.tv.data.model.Trailer
 import app.lumen.tv.ui.components.CardShape
 import app.lumen.tv.ui.components.CastEntry
 import app.lumen.tv.ui.components.CastRow
+import app.lumen.tv.ui.components.CollectionShelf
+import app.lumen.tv.data.model.DiscoverItem
 import app.lumen.tv.ui.components.HeroBackdrop
 import app.lumen.tv.ui.components.LumenCard
 import app.lumen.tv.ui.components.PillButton
@@ -85,6 +87,8 @@ fun DetailScreen(
     onOpenItem: (MediaItem) -> Unit,
     onTrailer: (Trailer, String, String?) -> Unit,
     onOpenPerson: (UUID) -> Unit,
+    onOpenFilm: (DiscoverItem) -> Unit,
+    onOpenCollection: (Int, Boolean) -> Unit,
     viewModel: DetailViewModel = koinViewModel(key = "detail-$itemId") { parametersOf(itemId, focusEpisodeId) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -138,6 +142,16 @@ fun DetailScreen(
                     CastRow(
                         people = detail.people.map { CastEntry(it.id.toString() + it.role, it.name, it.role, it.imageUrl) },
                         onOpen = { entry -> detail.people.firstOrNull { it.id.toString() + it.role == entry.key }?.let { onOpenPerson(it.id) } },
+                    )
+                }
+            }
+            state.collection?.let { collection ->
+                item(key = "collection") {
+                    CollectionShelf(
+                        collection = collection,
+                        currentTmdbId = detail.tmdbId,
+                        onOpenFilm = onOpenFilm,
+                        onOpenCollection = { request -> onOpenCollection(collection.ref.tmdbId, request) },
                     )
                 }
             }

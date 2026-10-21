@@ -20,4 +20,28 @@
         <item quantity="one">%1$d title in your library</item>
         <item quantity="other">%1$d titles in your library</item>
     </plurals>
+    <plurals name="collection_films_count">
+        <item quantity="one">%d film</item>
+        <item quantity="other">%d films</item>
+    </plurals>
+    <plurals name="collection_request_missing">
+        <item quantity="one">Request %d Missing Film</item>
+        <item quantity="other">Request %d Missing Films</item>
+    </plurals>
+    <plurals name="collection_request_films">
+        <item quantity="one">Request %d Film</item>
+        <item quantity="other">Request %d Films</item>
+    </plurals>
+    <plurals name="collection_requested">
+        <item quantity="one">Requested %d film.</item>
+        <item quantity="other">Requested %d films.</item>
+    </plurals>
+    <plurals name="collections_count">
+        <item quantity="one">%d collection</item>
+        <item quantity="other">%d collections</item>
+    </plurals>
+    <plurals name="collections_owned">
+        <item quantity="one">%d film in library</item>
+        <item quantity="other">%d films in library</item>
+    </plurals>
 </resources>

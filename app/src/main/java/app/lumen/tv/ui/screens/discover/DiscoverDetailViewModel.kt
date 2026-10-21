@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.lumen.tv.data.model.Availability
 import app.lumen.tv.data.model.DiscoverDetail
 import app.lumen.tv.data.model.DiscoverItem
+import app.lumen.tv.data.model.MovieCollection
 import app.lumen.tv.data.model.DiscoverKind
 import app.lumen.tv.data.model.ExternalRatings
 import app.lumen.tv.data.model.RequestChoice
@@ -34,6 +35,7 @@ data class DiscoverDetailState(
     val outcome: RequestOutcome? = null,
     val ratings: ExternalRatings? = null,
     val similar: List<DiscoverItem> = emptyList(),
+    val collection: MovieCollection? = null,
 ) {
     val server: RequestServer? get() = options?.servers?.firstOrNull { it.id == serverId }
     val serversForVersion: List<RequestServer> get() = options?.servers.orEmpty().filter { it.is4k == want4k }
@@ -64,7 +66,12 @@ class DiscoverDetailViewModel(
     private fun load() {
         viewModelScope.launch {
             runCatching { seerr.detail(kind, tmdbId) }
-                .onSuccess { detail -> _state.update { it.copy(detail = detail, error = false) } }
+                .onSuccess { detail ->
+                    _state.update { it.copy(detail = detail, error = false) }
+                    detail.collection?.let { ref ->
+                        runCatching { seerr.collection(ref.tmdbId) }.onSuccess { collection -> _state.update { it.copy(collection = collection) } }
+                    }
+                }
                 .onFailure { _state.update { it.copy(error = true) } }
         }
     }

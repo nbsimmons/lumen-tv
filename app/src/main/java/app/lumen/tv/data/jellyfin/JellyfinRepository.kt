@@ -268,6 +268,21 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
         )
     }
 
+    suspend fun allMovies(): List<MediaItem> = client.io {
+        client.api.libraryApi.getItems(
+            GetItemsRequest(
+                userId = userId,
+                includeItemTypes = listOf(BaseItemKind.MOVIE),
+                recursive = true,
+                sortBy = listOf(ItemSortBy.SORT_NAME),
+                fields = FIELDS,
+                enableUserData = true,
+                imageTypeLimit = 1,
+                enableImageTypes = IMAGE_TYPES,
+            ),
+        ).content.items
+    }.map(::toMediaItem)
+
     suspend fun library(kind: MediaKind, sort: LibrarySort, start: Int, limit: Int): LibraryPage {
         val (sortBy, order) = when (sort) {
             LibrarySort.Title -> ItemSortBy.SORT_NAME to SortOrder.ASCENDING
