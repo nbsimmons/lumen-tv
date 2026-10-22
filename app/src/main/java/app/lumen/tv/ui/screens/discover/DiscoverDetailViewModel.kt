@@ -12,6 +12,8 @@ import app.lumen.tv.data.model.RequestChoice
 import app.lumen.tv.data.model.RequestOptions
 import app.lumen.tv.data.model.RequestServer
 import app.lumen.tv.data.seerr.SeerrRepository
+import app.lumen.tv.data.settings.RequestDefaults
+import app.lumen.tv.data.settings.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +48,7 @@ class DiscoverDetailViewModel(
     private val kind: DiscoverKind,
     private val tmdbId: Int,
     private val seerr: SeerrRepository,
+    private val settings: SettingsStore,
 ) : ViewModel() {
     private val _state = MutableStateFlow(DiscoverDetailState())
     val state: StateFlow<DiscoverDetailState> = _state.asStateFlow()
@@ -100,8 +103,26 @@ class DiscoverDetailViewModel(
             }
             val requestable = detail.seasons.filter { it.availability == Availability.None }.map { it.number }.toSet()
             _state.update { it.copy(sheetOpen = true, selectedSeasons = requestable) }
-            selectVersion(false)
+            applyDefaults()
         }
+    }
+
+    private suspend fun applyDefaults() {
+        val saved = settings.requestDefaults(kind == DiscoverKind.Series)
+        val servers = _state.value.options?.servers.orEmpty()
+        val want4k = saved?.want4k == true && servers.any { it.is4k }
+        selectVersion(want4k)
+        val server = saved?.serverId?.let { id -> _state.value.serversForVersion.firstOrNull { it.id == id } }
+        if (server != null) {
+            selectServer(server.id)
+            saved.profileId?.takeIf { id -> server.profiles.any { it.id == id } }?.let(::selectProfile)
+        }
+    }
+
+    private fun rememberDefaults() {
+        val state = _state.value
+        if (state.options?.canCustomise != true) return
+        viewModelScope.launch { settings.saveRequestDefaults(kind == DiscoverKind.Series, RequestDefaults(state.want4k, state.serverId, state.profileId)) }
     }
 
     fun selectVersion(is4k: Boolean) {
@@ -144,6 +165,7 @@ class DiscoverDetailViewModel(
         viewModelScope.launch {
             runCatching { seerr.request(detail, seasons, choice) }
                 .onSuccess {
+                    rememberDefaults()
                     _state.update { it.copy(requesting = false, sheetOpen = false, outcome = RequestOutcome.Sent) }
                     load()
                 }

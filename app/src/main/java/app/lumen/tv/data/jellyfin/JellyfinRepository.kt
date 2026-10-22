@@ -1,5 +1,6 @@
 package app.lumen.tv.data.jellyfin
 
+import app.lumen.tv.data.model.HOME_ARRIVALS
 import app.lumen.tv.data.model.HOME_WATCHLIST
 import app.lumen.tv.data.model.HomeSection
 import app.lumen.tv.data.model.ItemDetail
@@ -69,6 +70,7 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
 
     suspend fun homeSections(): List<HomeSection> =
         listOf(
+            HomeSection(HOME_ARRIVALS, ShelfKind.Arrivals, null),
             HomeSection(KEY_RESUME, ShelfKind.ContinueWatching, null),
             HomeSection(KEY_NEXT_UP, ShelfKind.NextUp, null),
             HomeSection(HOME_WATCHLIST, ShelfKind.Watchlist, null),

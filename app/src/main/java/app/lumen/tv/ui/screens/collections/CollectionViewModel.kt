@@ -8,6 +8,8 @@ import app.lumen.tv.data.model.RequestChoice
 import app.lumen.tv.data.model.RequestOptions
 import app.lumen.tv.data.model.RequestServer
 import app.lumen.tv.data.seerr.SeerrRepository
+import app.lumen.tv.data.settings.RequestDefaults
+import app.lumen.tv.data.settings.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,6 +43,7 @@ class CollectionViewModel(
     private val tmdbId: Int,
     private val openRequest: Boolean,
     private val seerr: SeerrRepository,
+    private val settings: SettingsStore,
 ) : ViewModel() {
     private val _state = MutableStateFlow(CollectionState())
     val state: StateFlow<CollectionState> = _state.asStateFlow()
@@ -69,7 +72,7 @@ class CollectionViewModel(
                 ?: runCatching { seerr.requestOptions(DiscoverKind.Movie) }
                     .getOrElse { RequestOptions(canCustomise = false, servers = emptyList()) }
             _state.update { it.copy(loadingOptions = false, options = options, sheetOpen = true, selected = missing.map { m -> m.tmdbId }.toSet()) }
-            selectVersion(false)
+            applyDefaults()
         }
     }
 
@@ -82,6 +85,24 @@ class CollectionViewModel(
     fun toggleAll() = _state.update { state ->
         val all = state.collection?.missing.orEmpty().map { it.tmdbId }.toSet()
         state.copy(selected = if (state.selected.containsAll(all)) emptySet() else all)
+    }
+
+    private suspend fun applyDefaults() {
+        val saved = settings.requestDefaults(false)
+        val servers = _state.value.options?.servers.orEmpty()
+        val want4k = saved?.want4k == true && servers.any { it.is4k }
+        selectVersion(want4k)
+        val server = saved?.serverId?.let { id -> _state.value.serversForVersion.firstOrNull { it.id == id } }
+        if (server != null) {
+            selectServer(server.id)
+            saved.profileId?.takeIf { id -> server.profiles.any { it.id == id } }?.let(::selectProfile)
+        }
+    }
+
+    private fun rememberDefaults() {
+        val state = _state.value
+        if (state.options?.canCustomise != true) return
+        viewModelScope.launch { settings.saveRequestDefaults(false, RequestDefaults(state.want4k, state.serverId, state.profileId)) }
     }
 
     fun selectVersion(is4k: Boolean) {
@@ -106,6 +127,7 @@ class CollectionViewModel(
         _state.update { it.copy(requesting = true, outcome = null) }
         viewModelScope.launch {
             val sent = runCatching { seerr.requestMovies(order, choice) }.getOrDefault(0)
+            if (sent > 0) rememberDefaults()
             _state.update {
                 it.copy(
                     requesting = false,

@@ -98,6 +98,21 @@ data class BrowseQuery(
     val sort: BrowseSort = BrowseSort.Popular,
 )
 
+enum class RequestStatus { Pending, Approved, Declined }
+
+enum class RequestScope { Mine, Pending }
+
+data class RequestEntry(
+    val id: Int,
+    val item: DiscoverItem,
+    val status: RequestStatus,
+    val requestedAt: Long?,
+    val requestedBy: String?,
+    val mine: Boolean,
+    val seasons: List<Int>,
+    val is4k: Boolean,
+)
+
 data class DiscoverCast(val tmdbId: Int, val name: String, val role: String?, val imageUrl: String?)
 
 enum class DiscoverShelfKind { Trending, PopularMovies, PopularShows, UpcomingMovies, UpcomingShows, RecentlyRequested }

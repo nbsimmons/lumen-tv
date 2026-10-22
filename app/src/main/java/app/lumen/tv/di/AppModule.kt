@@ -9,6 +9,7 @@ import app.lumen.tv.data.logos.TitleLogos
 import app.lumen.tv.ui.screens.collections.CollectionViewModel
 import app.lumen.tv.ui.screens.collections.CollectionsViewModel
 import app.lumen.tv.ui.screens.browse.BrowseViewModel
+import app.lumen.tv.ui.screens.requests.RequestsViewModel
 import app.lumen.tv.data.model.BrowseQuery
 import app.lumen.tv.data.jellyfin.JellyfinClient
 import app.lumen.tv.data.jellyfin.JellyfinRepository
@@ -97,9 +98,10 @@ val appModule = module {
     viewModel { DiscoverViewModel(get()) }
     viewModel { SeerrConnectViewModel(get(), get(), get()) }
     viewModel { CollectionsViewModel(get(), get()) }
+    viewModel { RequestsViewModel(get()) }
     viewModel { (query: BrowseQuery) -> BrowseViewModel(query, get(), get()) }
-    viewModel { (tmdbId: Int, openRequest: Boolean) -> CollectionViewModel(tmdbId, openRequest, get()) }
-    viewModel { (kind: DiscoverKind, tmdbId: Int) -> DiscoverDetailViewModel(kind, tmdbId, get()) }
+    viewModel { (tmdbId: Int, openRequest: Boolean) -> CollectionViewModel(tmdbId, openRequest, get(), get()) }
+    viewModel { (kind: DiscoverKind, tmdbId: Int) -> DiscoverDetailViewModel(kind, tmdbId, get(), get()) }
     viewModel { SearchViewModel(get(), get(), get()) }
     viewModel { (ref: PersonRef) -> PersonViewModel(ref, get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }

@@ -6,6 +6,9 @@ import app.lumen.tv.data.model.BrowseQuery
 import app.lumen.tv.data.model.BrowseSort
 import app.lumen.tv.data.model.CollectionRef
 import app.lumen.tv.data.model.Option
+import app.lumen.tv.data.model.RequestEntry
+import app.lumen.tv.data.model.RequestScope
+import app.lumen.tv.data.model.RequestStatus
 import app.lumen.tv.data.model.StudioRef
 import app.lumen.tv.data.model.MovieCollection
 import app.lumen.tv.data.model.DiscoverCast
@@ -507,6 +510,54 @@ class SeerrRepository(
 
     private fun Long.has(flag: Long) = this and flag != 0L
 
+    suspend fun canManageRequests(): Boolean = runCatching { currentPermissions().let { it.has(ADMIN) || it.has(MANAGE_REQUESTS) } }.getOrDefault(false)
+
+    suspend fun requests(scope: RequestScope): List<RequestEntry> = coroutineScope {
+        val me = userId ?: currentUser().id
+        val page = authed<SeerrRequestPage>("request") {
+            parameter("take", REQUEST_PAGE)
+            parameter("skip", 0)
+            parameter("sort", "added")
+            parameter("sortDirection", "desc")
+            when (scope) {
+                RequestScope.Mine -> parameter("requestedBy", me)
+                RequestScope.Pending -> parameter("filter", "pending")
+            }
+        }
+        page.results.mapNotNull { request ->
+            val media = request.media ?: return@mapNotNull null
+            val tmdbId = media.tmdbId ?: return@mapNotNull null
+            val kind = if (media.mediaType == "tv") DiscoverKind.Series else DiscoverKind.Movie
+            async {
+                val item = runCatching { toItem(detailsFor(kind, tmdbId), kind) }.getOrNull() ?: return@async null
+                RequestEntry(
+                    id = request.id,
+                    item = item.copy(availability = availability(media.status, kind to tmdbId)),
+                    status = when (request.status) {
+                        REQUEST_DECLINED -> RequestStatus.Declined
+                        REQUEST_PENDING -> RequestStatus.Pending
+                        else -> RequestStatus.Approved
+                    },
+                    requestedAt = request.createdAt?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() },
+                    requestedBy = request.requestedBy?.displayName,
+                    mine = request.requestedBy?.id == null || request.requestedBy.id == me,
+                    seasons = request.seasons.orEmpty().map { it.seasonNumber }.sorted(),
+                    is4k = request.is4k == true,
+                )
+            }
+        }.awaitAll().filterNotNull()
+    }
+
+    suspend fun cancelRequest(id: Int) {
+        authedDelete("request/$id")
+        _changes.tryEmit(Unit)
+    }
+
+    suspend fun reviewRequest(id: Int, approve: Boolean) {
+        authedSend("request/$id/${if (approve) "approve" else "decline"}", emptyMap<String, String>())
+        _changes.tryEmit(Unit)
+    }
+
     private suspend fun myRequests(): List<DiscoverItem> = coroutineScope {
         val me = userId ?: currentUser().id
         val page = authed<SeerrRequestPage>("request") {
@@ -644,6 +695,8 @@ class SeerrRepository(
 
     private companion object {
         const val REQUEST_DECLINED = 3
+        const val REQUEST_PENDING = 1
+        const val REQUEST_PAGE = 50
         const val MAX_PROVIDERS = 30
         const val MIN_VOTES_FOR_TOP = 200
         val WATCH_REGION: String = java.util.Locale.getDefault().country.takeIf { it.length == 2 } ?: "GB"

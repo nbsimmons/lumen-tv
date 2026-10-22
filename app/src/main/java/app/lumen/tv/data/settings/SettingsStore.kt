@@ -39,6 +39,9 @@ data class LumenSettings(
 )
 
 @Serializable
+data class RequestDefaults(val want4k: Boolean = false, val serverId: Int? = null, val profileId: Int? = null)
+
+@Serializable
 data class TrackChoice(val audioLanguage: String? = null, val subtitleLanguage: String? = null, val subtitlesOff: Boolean = false)
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -129,6 +132,20 @@ class SettingsStore(context: Context) {
     private fun decodeChoices(raw: String?): Map<String, TrackChoice> =
         raw?.let { runCatching { json.decodeFromString(CHOICES_SERIALIZER, it) }.getOrNull() }.orEmpty()
 
+    suspend fun requestDefaults(series: Boolean): RequestDefaults? =
+        store.data.first()[if (series) TV_DEFAULTS else MOVIE_DEFAULTS]?.let { runCatching { json.decodeFromString(RequestDefaults.serializer(), it) }.getOrNull() }
+
+    suspend fun saveRequestDefaults(series: Boolean, defaults: RequestDefaults) {
+        store.edit { it[if (series) TV_DEFAULTS else MOVIE_DEFAULTS] = Json.encodeToString(RequestDefaults.serializer(), defaults) }
+    }
+
+    suspend fun arrivals(): Map<String, Long>? =
+        store.data.first()[ARRIVALS]?.let { runCatching { json.decodeFromString(ARRIVALS_SERIALIZER, it) }.getOrNull() }
+
+    suspend fun saveArrivals(arrivals: Map<String, Long>) {
+        store.edit { it[ARRIVALS] = Json.encodeToString(ARRIVALS_SERIALIZER, arrivals) }
+    }
+
     suspend fun setSearchKeyboard(keyboard: SearchKeyboard) {
         store.edit { it[SEARCH_KEYBOARD] = keyboard.name }
     }
@@ -145,6 +162,10 @@ class SettingsStore(context: Context) {
         val TRACK_CHOICES = stringPreferencesKey("series_track_choices")
         val CHOICES_SERIALIZER = MapSerializer(String.serializer(), TrackChoice.serializer())
         const val MAX_TRACK_CHOICES = 200
+        val ARRIVALS = stringPreferencesKey("request_arrivals")
+        val MOVIE_DEFAULTS = stringPreferencesKey("request_defaults_movie")
+        val TV_DEFAULTS = stringPreferencesKey("request_defaults_tv")
+        val ARRIVALS_SERIALIZER = MapSerializer(String.serializer(), Long.serializer())
         val RECENT = stringPreferencesKey("recent_searches")
         val RECENT_VIEWS = stringPreferencesKey("recently_viewed")
         val VIEWS_SERIALIZER = ListSerializer(RecentView.serializer())

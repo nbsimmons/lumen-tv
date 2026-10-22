@@ -91,6 +91,7 @@ fun HomeScreen(
                     memory = viewModel.focusMemory,
                     onFocus = viewModel::onFocus,
                     onOpenItem = onOpenItem,
+                    onOpened = viewModel::onOpened,
                     onMenu = { item, shelf -> menu = item to shelf },
                     refocus = refocus,
                     modifier = Modifier.weight(1f),
@@ -140,6 +141,7 @@ private fun Shelves(
     memory: ShelfFocusMemory,
     onFocus: (MediaItem) -> Unit,
     onOpenItem: (MediaItem) -> Unit,
+    onOpened: (MediaItem, Shelf) -> Unit,
     onMenu: (MediaItem, Shelf) -> Unit,
     refocus: Int,
     modifier: Modifier = Modifier,
@@ -159,7 +161,10 @@ private fun Shelves(
             shape = if (landscape) CardShape.Landscape else CardShape.Poster,
             progress = if (kind == ShelfKind.ContinueWatching) item.progress else null,
             watched = item.played,
-            onClick = { onOpenItem(item) },
+            onClick = {
+                onOpenItem(item)
+                onOpened(item, source)
+            },
             onMenu = { onMenu(item, source) },
             onFocused = {
                 markFocused()
@@ -176,6 +181,7 @@ private fun shelfTitle(shelf: Shelf): String = homeSectionTitle(shelf.kind, shel
 fun homeSectionTitle(kind: ShelfKind, library: String?): String = when (kind) {
     ShelfKind.ContinueWatching -> stringResource(R.string.shelf_continue_watching)
     ShelfKind.NextUp -> stringResource(R.string.shelf_next_up)
+    ShelfKind.Arrivals -> stringResource(R.string.shelf_arrivals)
     ShelfKind.Watchlist -> stringResource(R.string.shelf_watchlist)
     ShelfKind.RecentlyAdded -> stringResource(R.string.shelf_recently_added, library.orEmpty())
     ShelfKind.NewReleases -> stringResource(R.string.shelf_new_releases, library.orEmpty())

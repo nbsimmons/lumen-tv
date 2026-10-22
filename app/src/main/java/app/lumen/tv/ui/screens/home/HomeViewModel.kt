@@ -5,7 +5,12 @@ import androidx.lifecycle.viewModelScope
 import app.lumen.tv.StartupWork
 import app.lumen.tv.data.jellyfin.JellyfinRepository
 import app.lumen.tv.data.model.ExternalRatings
+import app.lumen.tv.data.model.HOME_ARRIVALS
 import app.lumen.tv.data.model.HOME_WATCHLIST
+import app.lumen.tv.data.model.Availability
+import app.lumen.tv.data.model.DiscoverKind
+import app.lumen.tv.data.model.MediaKind
+import app.lumen.tv.data.model.RequestScope
 import app.lumen.tv.data.model.MediaItem
 import app.lumen.tv.data.model.asMediaItem
 import app.lumen.tv.data.seerr.SeerrRepository
@@ -82,6 +87,7 @@ class HomeViewModel(
                 if (cached.isNullOrEmpty()) _state.value = HomeState.Loading else publish(cached)
             }
             launch { loadWatchlist(hidden) }
+            launch { loadArrivals(hidden) }
             runCatching { repository.homeShelves(hidden) }
                 .onSuccess {
                     publish(it)
@@ -95,11 +101,13 @@ class HomeViewModel(
     }
 
     private var watchlist: Shelf? = null
+    private var arrivals: Shelf? = null
 
     private fun publish(shelves: List<Shelf>) {
-        val base = shelves.filterNot { it.kind == ShelfKind.Watchlist }
+        val base = shelves.filterNot { it.kind == ShelfKind.Watchlist || it.kind == ShelfKind.Arrivals }
         val insertAt = base.indexOfLast { it.kind == ShelfKind.ContinueWatching || it.kind == ShelfKind.NextUp } + 1
-        val merged = watchlist?.let { base.toMutableList().apply { add(insertAt, it) } } ?: base
+        val merged = (watchlist?.let { base.toMutableList().apply { add(insertAt, it) } } ?: base)
+            .let { list -> arrivals?.let { listOf(it) + list } ?: list }
         _state.value = HomeState.Content(merged)
         val current = _focused.value
         _focused.value = current?.let { focused -> shelves.firstNotNullOfOrNull { shelf -> shelf.items.firstOrNull { it.id == focused.id } } }
@@ -121,6 +129,43 @@ class HomeViewModel(
         watchlist = Shelf(HOME_WATCHLIST, ShelfKind.Watchlist, null, favourites + extra).takeIf { it.items.isNotEmpty() }
         (_state.value as? HomeState.Content)?.let { publish(it.shelves) }
     }
+
+    private suspend fun loadArrivals(hidden: Set<String>) {
+        if (HOME_ARRIVALS in hidden) {
+            arrivals = null
+            return
+        }
+        seerr.restore()
+        if (seerr.connected.value != true) return
+        val entries = runCatching { seerr.requests(RequestScope.Mine) }.getOrNull() ?: return
+        val arrived = entries.map { it.item }
+            .filter { it.jellyfinId != null && (it.availability == Availability.Available || it.availability == Availability.PartiallyAvailable) }
+            .distinctBy { it.kind to it.tmdbId }
+        val now = System.currentTimeMillis()
+        val known = settings.arrivals()
+        val updated = (known ?: emptyMap()).toMutableMap()
+        arrived.forEach { item -> updated.putIfAbsent(arrivalKey(item.kind, item.tmdbId), if (known == null) SEEN else now) }
+        updated.keys.retainAll(arrived.map { arrivalKey(it.kind, it.tmdbId) }.toSet())
+        if (updated != known) settings.saveArrivals(updated)
+        val fresh = arrived.filter { item -> (updated[arrivalKey(item.kind, item.tmdbId)] ?: SEEN) > now - ARRIVAL_WINDOW_MS }
+        arrivals = Shelf(HOME_ARRIVALS, ShelfKind.Arrivals, null, fresh.map { it.asMediaItem() }).takeIf { fresh.isNotEmpty() }
+        (_state.value as? HomeState.Content)?.let { publish(it.shelves) }
+    }
+
+    fun onOpened(item: MediaItem, shelf: Shelf) {
+        if (shelf.kind != ShelfKind.Arrivals) return
+        val tmdbId = item.tmdbId ?: return
+        val kind = if (item.kind == MediaKind.Series) DiscoverKind.Series else DiscoverKind.Movie
+        viewModelScope.launch {
+            val current = settings.arrivals()?.toMutableMap() ?: return@launch
+            current[arrivalKey(kind, tmdbId)] = SEEN
+            settings.saveArrivals(current)
+            arrivals = arrivals?.copy(items = arrivals!!.items.filterNot { it.id == item.id })?.takeIf { it.items.isNotEmpty() }
+            (_state.value as? HomeState.Content)?.let { publish(it.shelves) }
+        }
+    }
+
+    private fun arrivalKey(kind: DiscoverKind, tmdbId: Int) = "$kind-$tmdbId"
 
     fun removeFromContinueWatching(item: MediaItem) = mutate(item) { repository.clearResume(item.id) }
 
@@ -170,6 +215,8 @@ class HomeViewModel(
     fun onFocus(item: MediaItem) = _focused.update { item }
 
     private companion object {
+        const val SEEN = 0L
+        const val ARRIVAL_WINDOW_MS = 7L * 24 * 60 * 60 * 1000
         const val RATINGS_WAIT_MS = 250L
     }
 }

@@ -62,8 +62,9 @@ data class ItemDetail(
 )
 
 const val HOME_WATCHLIST = "watchlist"
+const val HOME_ARRIVALS = "arrivals"
 
-enum class ShelfKind { ContinueWatching, NextUp, Watchlist, RecentlyAdded, NewReleases }
+enum class ShelfKind { Arrivals, ContinueWatching, NextUp, Watchlist, RecentlyAdded, NewReleases }
 
 data class HomeSection(val key: String, val kind: ShelfKind, val library: String?)
 

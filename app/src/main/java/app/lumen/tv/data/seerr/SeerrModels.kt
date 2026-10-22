@@ -149,7 +149,19 @@ data class SeerrVideo(val site: String? = null, val key: String? = null, val typ
 data class SeerrRequestMedia(val tmdbId: Int? = null, val mediaType: String? = null, val status: Int? = null)
 
 @Serializable
-data class SeerrRequest(val id: Int, val status: Int = 1, val type: String? = null, val media: SeerrRequestMedia? = null)
+data class SeerrRequest(
+    val id: Int,
+    val status: Int = 1,
+    val type: String? = null,
+    val media: SeerrRequestMedia? = null,
+    val createdAt: String? = null,
+    val is4k: Boolean? = null,
+    val requestedBy: SeerrRequestUser? = null,
+    val seasons: List<SeerrSeasonStatus>? = null,
+)
+
+@Serializable
+data class SeerrRequestUser(val id: Int? = null, val displayName: String? = null)
 
 @Serializable
 data class SeerrRequestPage(val results: List<SeerrRequest> = emptyList())

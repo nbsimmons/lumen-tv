@@ -55,6 +55,7 @@ private val HeroHeight = 180.dp
 fun DiscoverScreen(
     onOpen: (DiscoverItem) -> Unit,
     onBrowse: (DiscoverKind) -> Unit,
+    onRequests: () -> Unit,
     viewModel: DiscoverViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -92,6 +93,7 @@ fun DiscoverScreen(
                 ) {
                     PillButton(text = stringResource(R.string.browse_movies), onClick = { onBrowse(DiscoverKind.Movie) })
                     PillButton(text = stringResource(R.string.browse_tv), onClick = { onBrowse(DiscoverKind.Series) })
+                    PillButton(text = stringResource(R.string.requests_title), onClick = onRequests)
                 }
                 DiscoverShelves(current.shelves, viewModel, onOpen, Modifier.weight(1f))
             }

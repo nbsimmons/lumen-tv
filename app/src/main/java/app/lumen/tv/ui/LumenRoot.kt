@@ -44,6 +44,7 @@ import app.lumen.tv.ui.screens.discover.DiscoverDetailScreen
 import app.lumen.tv.ui.screens.discover.DiscoverScreen
 import app.lumen.tv.ui.screens.search.SearchScreen
 import app.lumen.tv.ui.screens.browse.BrowseScreen
+import app.lumen.tv.ui.screens.requests.RequestsScreen
 import app.lumen.tv.data.model.BrowseQuery
 import app.lumen.tv.data.model.StudioRef
 import app.lumen.tv.ui.screens.collections.CollectionScreen
@@ -158,7 +159,12 @@ private fun MainShell() {
                         live = LiveRequest(entry.arguments?.getString("key").orEmpty()),
                     )
                 }
-                composable(TopDestination.Discover.route) { DiscoverScreen(onOpen = openDiscover, onBrowse = { kind -> openBrowse(BrowseQuery(kind)) }) }
+                composable(TopDestination.Discover.route) { DiscoverScreen(
+                        onOpen = openDiscover,
+                        onBrowse = { kind -> openBrowse(BrowseQuery(kind)) },
+                        onRequests = { navController.navigate("requests") },
+                    ) }
+                composable("requests") { RequestsScreen(onOpen = openFilm) }
                 composable(
                     route = "browse?kind={kind}&studio={studio}&studioName={studioName}&network={network}",
                     arguments = listOf(
