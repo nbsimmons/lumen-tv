@@ -5,7 +5,6 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import app.lumen.tv.BuildConfig
-import app.lumen.tv.data.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,7 +22,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.security.MessageDigest
-import java.time.Duration
 
 data class Release(val version: String, val notes: String?, val url: String, val size: Long, val profileUrl: String? = null)
 
@@ -58,7 +56,6 @@ object UpdateEvents {
 
 class UpdateRepository(
     private val context: Context,
-    private val settings: SettingsStore,
     private val scope: CoroutineScope,
     private val installer: UpdateInstaller?,
 ) {
@@ -73,17 +70,19 @@ class UpdateRepository(
     private val http = OkHttpClient()
     private val json = Json { ignoreUnknownKeys = true }
     private var download: Job? = null
+    private var checkedThisLaunch = false
+    private var dismissedThisLaunch: String? = null
 
     init {
         scope.launch { UpdateEvents.failures.collect { _state.value = UpdateState.Failed(currentRelease()) } }
     }
 
     fun checkInBackground() {
-        if (!enabled) return
+        if (!enabled || checkedThisLaunch) return
+        checkedThisLaunch = true
         scope.launch {
-            if (!settings.updateCheckDue(CHECK_INTERVAL)) return@launch
             val release = check() ?: return@launch
-            if (release.version != settings.dismissedUpdate()) _prompt.value = true
+            if (release.version != dismissedThisLaunch) _prompt.value = true
         }
     }
 
@@ -97,7 +96,7 @@ class UpdateRepository(
     fun later() {
         _prompt.value = false
         val release = currentRelease() ?: return
-        if (_state.value is UpdateState.Available) scope.launch { settings.setDismissedUpdate(release.version) }
+        if (_state.value is UpdateState.Available) dismissedThisLaunch = release.version
     }
 
     fun dismiss() {
@@ -142,7 +141,6 @@ class UpdateRepository(
             _state.value = UpdateState.Failed(null)
             return null
         }
-        settings.markUpdateChecked()
         if (release == null || compare(release.version, BuildConfig.VERSION_NAME) <= 0) {
             _state.value = UpdateState.UpToDate
             return null
@@ -248,7 +246,6 @@ class UpdateRepository(
 
     private companion object {
         const val BUFFER = 64 * 1024
-        val CHECK_INTERVAL: Duration = Duration.ofHours(6)
 
         @Suppress("DEPRECATION")
         val SIGNATURE_FLAGS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES

@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import app.lumen.tv.data.logos.TitleLogos
+import app.lumen.tv.data.model.DiscoverItem
+import org.koin.compose.koinInject
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,4 +36,17 @@ fun TitleLogo(title: String, logoUrl: String?, style: TextStyle, maxHeight: Dp, 
             modifier = modifier.heightIn(max = maxHeight).widthIn(max = maxWidth),
         )
     }
+}
+
+@Composable
+fun rememberLogo(item: DiscoverItem?, logos: TitleLogos = koinInject()): String? {
+    if (item == null) return null
+    val logo by produceState(logos.cached(item), item.kind, item.tmdbId, item.jellyfinId) { value = logos.logo(item) ?: value }
+    return logo
+}
+
+@Composable
+fun rememberCollectionLogo(tmdbId: Int, logos: TitleLogos = koinInject()): String? {
+    val logo by produceState(logos.cachedCollection(tmdbId), tmdbId) { value = logos.collectionLogo(tmdbId) ?: value }
+    return logo
 }

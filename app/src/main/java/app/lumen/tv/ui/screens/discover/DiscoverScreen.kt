@@ -38,6 +38,7 @@ import app.lumen.tv.ui.components.PillButton
 import app.lumen.tv.ui.components.PinnedShelves
 import app.lumen.tv.ui.components.ShelfSpec
 import app.lumen.tv.ui.components.TitleLogo
+import app.lumen.tv.ui.components.rememberLogo
 import app.lumen.tv.ui.components.Spinner
 import app.lumen.tv.ui.components.availabilityLabel
 import app.lumen.tv.ui.theme.LumenColors
@@ -99,7 +100,7 @@ private fun FocusedBackdrop(viewModel: DiscoverViewModel) {
 @Composable
 private fun FocusedHero(viewModel: DiscoverViewModel) {
     val focused by viewModel.focused.collectAsStateWithLifecycle()
-    DiscoverHero(focused, logoUrl = viewModel::logoUrl)
+    DiscoverHero(focused)
 }
 
 @Composable
@@ -133,7 +134,7 @@ private fun DiscoverShelves(
 }
 
 @Composable
-fun DiscoverHero(item: DiscoverItem?, logoUrl: (DiscoverItem) -> String?, modifier: Modifier = Modifier) {
+fun DiscoverHero(item: DiscoverItem?, modifier: Modifier = Modifier) {
     AnimatedContent(
         targetState = item,
         contentKey = { it?.let { i -> "${i.kind}-${i.tmdbId}" } },
@@ -147,7 +148,7 @@ fun DiscoverHero(item: DiscoverItem?, logoUrl: (DiscoverItem) -> String?, modifi
         Column(Modifier.widthIn(max = 560.dp)) {
             TitleLogo(
                 title = current.title,
-                logoUrl = logoUrl(current),
+                logoUrl = rememberLogo(current),
                 style = MaterialTheme.typography.displayMedium,
                 maxHeight = 90.dp,
                 maxWidth = 380.dp,

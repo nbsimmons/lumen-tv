@@ -5,7 +5,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -102,21 +101,6 @@ class SettingsStore(context: Context) {
         store.edit { it[QUALITY] = quality.bitrate }
     }
 
-    suspend fun updateCheckDue(interval: java.time.Duration): Boolean {
-        val last = store.data.first()[LAST_UPDATE_CHECK] ?: return true
-        return java.time.Instant.ofEpochMilli(last).plus(interval).isBefore(java.time.Instant.now())
-    }
-
-    suspend fun markUpdateChecked() {
-        store.edit { it[LAST_UPDATE_CHECK] = System.currentTimeMillis() }
-    }
-
-    suspend fun dismissedUpdate(): String? = store.data.first()[DISMISSED_UPDATE]
-
-    suspend fun setDismissedUpdate(version: String) {
-        store.edit { it[DISMISSED_UPDATE] = version }
-    }
-
     suspend fun setSearchKeyboard(keyboard: SearchKeyboard) {
         store.edit { it[SEARCH_KEYBOARD] = keyboard.name }
     }
@@ -129,8 +113,6 @@ class SettingsStore(context: Context) {
         val QUALITY = intPreferencesKey("max_bitrate")
         val SUBTITLES = stringPreferencesKey("subtitle_mode")
         val SEARCH_KEYBOARD = stringPreferencesKey("search_keyboard")
-        val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check")
-        val DISMISSED_UPDATE = stringPreferencesKey("dismissed_update")
         val RECENT = stringPreferencesKey("recent_searches")
         val RECENT_VIEWS = stringPreferencesKey("recently_viewed")
         val VIEWS_SERIALIZER = ListSerializer(RecentView.serializer())

@@ -81,6 +81,7 @@ import app.lumen.tv.ui.components.ShelfRow
 import app.lumen.tv.ui.components.SheetHeading
 import app.lumen.tv.ui.components.SheetRow
 import app.lumen.tv.ui.components.TitleLogo
+import app.lumen.tv.ui.components.rememberLogo
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
@@ -143,7 +144,7 @@ fun DiscoverDetailScreen(
                     ) {
                         Header(
                             detail = detail,
-                            logoUrl = viewModel.logoUrl(detail.item),
+                            logoUrl = rememberLogo(detail.item),
                             ratings = state.ratings,
                             onTrailer = { onTrailer(it, detail.item.title, detail.item.backdropUrl) },
                             requesting = state.requesting,

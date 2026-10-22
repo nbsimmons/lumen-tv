@@ -52,6 +52,10 @@ fun SettingsScreen(onOpenPrivacy: () -> Unit, viewModel: SettingsViewModel = koi
     val sections by viewModel.sections.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     var confirmSignOut by remember { mutableStateOf(false) }
+    var editingTmdb by remember { mutableStateOf(false) }
+    val tmdbKey by viewModel.tmdbKey.collectAsStateWithLifecycle()
+    val tmdbCheck by viewModel.tmdbCheck.collectAsStateWithLifecycle()
+    val tmdbSaving by viewModel.tmdbSaving.collectAsStateWithLifecycle()
     val firstRow = remember { FocusRequester() }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -108,6 +112,18 @@ fun SettingsScreen(onOpenPrivacy: () -> Unit, viewModel: SettingsViewModel = koi
                 item { SettingRow(stringResource(R.string.settings_seerr_disconnect), null, destructive = true, onClick = viewModel::disconnectSeerr) }
             }
 
+            item { Section(stringResource(R.string.settings_artwork)) }
+            item {
+                SettingRow(
+                    stringResource(R.string.settings_tmdb_key),
+                    tmdbKey?.let { stringResource(R.string.settings_tmdb_set, it.takeLast(4)) } ?: stringResource(R.string.settings_tmdb_not_set),
+                    onClick = {
+                        viewModel.clearTmdbCheck()
+                        editingTmdb = true
+                    },
+                )
+            }
+
             item { Section(stringResource(R.string.settings_playback)) }
             item {
                 SettingRow(
@@ -158,12 +174,33 @@ fun SettingsScreen(onOpenPrivacy: () -> Unit, viewModel: SettingsViewModel = koi
             item { SettingRow(stringResource(R.string.settings_channels), caps.maxAudioChannels.toString()) }
             item {
                 Text(
+                    stringResource(R.string.settings_tmdb_attribution),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LumenColors.OnSurfaceFaint,
+                    modifier = Modifier.padding(horizontal = LumenSpacing.M),
+                )
+            }
+            item {
+                Text(
                     stringResource(R.string.settings_not_affiliated),
                     style = MaterialTheme.typography.labelMedium,
                     color = LumenColors.OnSurfaceFaint,
                     modifier = Modifier.padding(LumenSpacing.M),
                 )
             }
+        }
+        if (editingTmdb) {
+            TmdbKeyDialog(
+                hasKey = tmdbKey != null,
+                check = tmdbCheck,
+                saving = tmdbSaving,
+                onSave = { key -> viewModel.saveTmdbKey(key) { editingTmdb = false } },
+                onRemove = {
+                    viewModel.removeTmdbKey()
+                    editingTmdb = false
+                },
+                onDismiss = { editingTmdb = false },
+            )
         }
     }
 }

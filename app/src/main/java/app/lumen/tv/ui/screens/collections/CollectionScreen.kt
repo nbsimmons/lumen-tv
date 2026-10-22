@@ -65,6 +65,8 @@ import app.lumen.tv.ui.components.SheetHeading
 import app.lumen.tv.ui.components.SheetRow
 import app.lumen.tv.ui.components.ShelfRow
 import app.lumen.tv.ui.components.Spinner
+import app.lumen.tv.ui.components.TitleLogo
+import app.lumen.tv.ui.components.rememberCollectionLogo
 import app.lumen.tv.ui.components.availabilityColor
 import app.lumen.tv.ui.components.availabilityLabel
 import app.lumen.tv.ui.theme.LumenColors
@@ -150,12 +152,12 @@ private fun Header(collection: MovieCollection, state: CollectionState, viewMode
         if (!state.sheetOpen) runCatching { primary.requestFocus() }
     }
     Column(Modifier.widthIn(max = 680.dp).padding(horizontal = LumenSpacing.SafeHorizontal)) {
-        Text(
-            collection.ref.name,
+        TitleLogo(
+            title = collection.ref.name,
+            logoUrl = rememberCollectionLogo(collection.ref.tmdbId),
             style = MaterialTheme.typography.displayLarge,
-            color = LumenColors.OnSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            maxHeight = 110.dp,
+            maxWidth = 420.dp,
         )
         Spacer(Modifier.height(LumenSpacing.M))
         Text(

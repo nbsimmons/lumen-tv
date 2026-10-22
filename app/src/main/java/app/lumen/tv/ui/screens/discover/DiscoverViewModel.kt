@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import app.lumen.tv.data.model.DiscoverItem
 import app.lumen.tv.data.model.DiscoverShelf
 import app.lumen.tv.data.model.DiscoverShelfKind
-import app.lumen.tv.data.jellyfin.JellyfinRepository
 import app.lumen.tv.data.seerr.SeerrRepository
 import app.lumen.tv.ui.components.ShelfFocusMemory
 import kotlinx.coroutines.async
@@ -22,10 +21,7 @@ sealed interface DiscoverState {
     data class Content(val shelves: List<DiscoverShelf>) : DiscoverState
 }
 
-class DiscoverViewModel(
-    private val seerr: SeerrRepository,
-    private val jellyfin: JellyfinRepository,
-) : ViewModel() {
+class DiscoverViewModel(private val seerr: SeerrRepository) : ViewModel() {
     private val _state = MutableStateFlow<DiscoverState>(DiscoverState.Loading)
     val state: StateFlow<DiscoverState> = _state.asStateFlow()
 
@@ -34,7 +30,6 @@ class DiscoverViewModel(
 
     val focusMemory = ShelfFocusMemory()
 
-    fun logoUrl(item: DiscoverItem): String? = item.jellyfinId?.let(jellyfin::logoUrl)
 
     val autoConnecting: StateFlow<Boolean> = seerr.autoConnecting
 

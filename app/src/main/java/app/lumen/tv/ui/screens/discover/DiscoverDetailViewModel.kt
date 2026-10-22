@@ -11,7 +11,6 @@ import app.lumen.tv.data.model.ExternalRatings
 import app.lumen.tv.data.model.RequestChoice
 import app.lumen.tv.data.model.RequestOptions
 import app.lumen.tv.data.model.RequestServer
-import app.lumen.tv.data.jellyfin.JellyfinRepository
 import app.lumen.tv.data.seerr.SeerrRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,12 +45,10 @@ class DiscoverDetailViewModel(
     private val kind: DiscoverKind,
     private val tmdbId: Int,
     private val seerr: SeerrRepository,
-    private val jellyfin: JellyfinRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(DiscoverDetailState())
     val state: StateFlow<DiscoverDetailState> = _state.asStateFlow()
 
-    fun logoUrl(item: DiscoverItem): String? = item.jellyfinId?.let(jellyfin::logoUrl)
 
     init {
         load()

@@ -80,7 +80,10 @@ class HomeViewModel(
                     publish(it)
                     startup.afterHomeLoaded()
                 }
-                .onFailure { if (_state.value !is HomeState.Content) _state.value = HomeState.Error }
+                .onFailure {
+                    if (_state.value !is HomeState.Content) _state.value = HomeState.Error
+                    startup.afterHomeLoaded()
+                }
         }
     }
 

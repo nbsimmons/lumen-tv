@@ -9,6 +9,9 @@ import app.lumen.tv.data.seerr.SeerrRepository
 import app.lumen.tv.data.settings.LumenSettings
 import app.lumen.tv.data.settings.SettingsStore
 import app.lumen.tv.data.update.UpdateRepository
+import app.lumen.tv.data.logos.TitleLogos
+import app.lumen.tv.data.logos.TmdbKeyCheck
+import app.lumen.tv.data.session.SessionStore
 import app.lumen.tv.data.update.UpdateState
 import app.lumen.tv.data.settings.StreamingQuality
 import app.lumen.tv.data.settings.SearchKeyboard
@@ -40,7 +43,40 @@ class SettingsViewModel(
     profiles: DeviceProfileFactory,
     private val library: JellyfinRepository,
     private val updates: UpdateRepository,
+    private val sessions: SessionStore,
+    private val logos: TitleLogos,
 ) : ViewModel() {
+    val tmdbKey: StateFlow<String?> = sessions.tmdbKey.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val _tmdbCheck = MutableStateFlow<TmdbKeyCheck?>(null)
+    val tmdbCheck: StateFlow<TmdbKeyCheck?> = _tmdbCheck.asStateFlow()
+
+    private val _tmdbSaving = MutableStateFlow(false)
+    val tmdbSaving: StateFlow<Boolean> = _tmdbSaving.asStateFlow()
+
+    fun saveTmdbKey(key: String, onSaved: () -> Unit) = viewModelScope.launch {
+        if (key.isBlank() || _tmdbSaving.value) return@launch
+        _tmdbSaving.value = true
+        val result = logos.check(key)
+        _tmdbCheck.value = result
+        if (result == TmdbKeyCheck.Valid) {
+            sessions.saveTmdbKey(key)
+            logos.forget()
+            onSaved()
+        }
+        _tmdbSaving.value = false
+    }
+
+    fun removeTmdbKey() = viewModelScope.launch {
+        sessions.saveTmdbKey(null)
+        logos.forget()
+        _tmdbCheck.value = null
+    }
+
+    fun clearTmdbCheck() {
+        _tmdbCheck.value = null
+    }
+
     val updatesEnabled: Boolean = updates.enabled
     val updateState: StateFlow<UpdateState> = updates.state
 

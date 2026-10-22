@@ -6,7 +6,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import java.util.UUID
 
 data class JellyfinSession(
@@ -89,6 +91,12 @@ class SessionStore(context: Context, private val cipher: SecureCipher) {
         }
     }
 
+    val tmdbKey: Flow<String?> = store.data.map { prefs -> prefs[TMDB_KEY]?.let(cipher::decrypt) }
+
+    suspend fun saveTmdbKey(key: String?) {
+        store.edit { if (key.isNullOrBlank()) it.remove(TMDB_KEY) else it[TMDB_KEY] = cipher.encrypt(key.trim()) }
+    }
+
     private companion object {
         val DEVICE_ID = stringPreferencesKey("device_id")
         val SERVER_URL = stringPreferencesKey("server_url")
@@ -98,5 +106,6 @@ class SessionStore(context: Context, private val cipher: SecureCipher) {
         val ACCESS_TOKEN = stringPreferencesKey("access_token")
         val SEERR_URL = stringPreferencesKey("seerr_url")
         val SEERR_COOKIE = stringPreferencesKey("seerr_cookie")
+        val TMDB_KEY = stringPreferencesKey("tmdb_key")
     }
 }
