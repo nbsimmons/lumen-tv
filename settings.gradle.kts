@@ -19,3 +19,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "lumen-tv"
 include(":app")
+include(":baselineprofile")

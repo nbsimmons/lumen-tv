@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.baselineprofile)
 }
 
 val signing = Properties().apply {
@@ -84,6 +85,7 @@ android {
 
 dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
+    implementation(libs.profileinstaller)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -119,6 +121,16 @@ dependencies {
     implementation(libs.media3.ui.compose)
 
     "sideloadImplementation"(libs.newpipe.extractor)
+}
+
+baselineProfile {
+    mergeIntoMain = true
+    automaticGenerationDuringBuild = false
+    variants {
+        create("sideloadModernRelease") {
+            from(project(":baselineprofile"))
+        }
+    }
 }
 
 androidComponents {

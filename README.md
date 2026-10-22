@@ -24,6 +24,16 @@ APKs are written to `app/build/outputs/apk/sideloadModern/release/` and `app/bui
 
 Release builds are signed with the key described in `~/.lumen/signing.properties` (override the path with `LUMEN_SIGNING`). Without that file they fall back to the local debug key, which the release script refuses to publish.
 
+## Baseline profile
+
+`app/src/main/generated/baselineProfiles/` holds the startup profile Android uses to pre-compile Lumen's launch, Home, detail, Discover, Search and Collections code. Regenerate it after big UI changes with a device where Lumen is already installed (with the release key) and signed in to Jellyfin and Seerr, otherwise only the sign-in screen gets profiled:
+
+```bash
+ANDROID_SERIAL=<device> ./gradlew :app:generateBaselineProfile
+```
+
+The generator lives in `baselineprofile/` and only drives the app with remote presses. A real Android 13+ device works best; the headless emulator crashes partway through.
+
 ## Releases and updates
 
 The sideload build checks the GitHub repo in `lumen.updateRepo` (in `gradle.properties`) for a newer release when Home loads (at most every 6 hours) and from Settings › Check for Updates. The modern build downloads the `*-sideload.apk` asset and the legacy build the `*-legacy.apk` asset, checks that it's signed with the same key as the installed app, then hands it to Android's installer. Android always asks the viewer to confirm, and each device needs Lumen allowed to install unknown apps once.
