@@ -36,6 +36,7 @@ data class MediaItem(
     val unplayedCount: Int?,
     val tmdbId: Int? = null,
     val lastPlayed: Long? = null,
+    val remote: Boolean = false,
 )
 
 data class Person(
@@ -60,7 +61,9 @@ data class ItemDetail(
     val trailer: Trailer?,
 )
 
-enum class ShelfKind { ContinueWatching, NextUp, RecentlyAdded, NewReleases }
+const val HOME_WATCHLIST = "watchlist"
+
+enum class ShelfKind { ContinueWatching, NextUp, Watchlist, RecentlyAdded, NewReleases }
 
 data class HomeSection(val key: String, val kind: ShelfKind, val library: String?)
 
@@ -76,6 +79,18 @@ data class Shelf(
 data class LibraryView(val id: UUID, val name: String?, val movies: Boolean)
 
 enum class LibrarySort { Title, DateAdded, Year, Rating }
+
+enum class WatchFilter { All, Unwatched, Watched }
+
+data class LibraryFilter(
+    val genre: String? = null,
+    val watched: WatchFilter = WatchFilter.All,
+    val decade: Int? = null,
+    val minRating: Int? = null,
+    val uhdOnly: Boolean = false,
+) {
+    val activeCount: Int get() = listOf(genre != null, watched != WatchFilter.All, decade != null, minRating != null, uhdOnly).count { it }
+}
 
 data class LibraryPage(val items: List<MediaItem>, val total: Int)
 

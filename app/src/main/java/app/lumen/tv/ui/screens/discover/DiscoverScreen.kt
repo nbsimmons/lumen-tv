@@ -8,6 +8,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,6 +54,7 @@ private val HeroHeight = 180.dp
 @Composable
 fun DiscoverScreen(
     onOpen: (DiscoverItem) -> Unit,
+    onBrowse: (DiscoverKind) -> Unit,
     viewModel: DiscoverViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -84,7 +86,13 @@ fun DiscoverScreen(
                 ) {
                     FocusedHero(viewModel)
                 }
-                Spacer(Modifier.height(LumenSpacing.M))
+                Row(
+                    Modifier.padding(horizontal = LumenSpacing.SafeHorizontal, vertical = LumenSpacing.S),
+                    horizontalArrangement = Arrangement.spacedBy(LumenSpacing.S),
+                ) {
+                    PillButton(text = stringResource(R.string.browse_movies), onClick = { onBrowse(DiscoverKind.Movie) })
+                    PillButton(text = stringResource(R.string.browse_tv), onClick = { onBrowse(DiscoverKind.Series) })
+                }
                 DiscoverShelves(current.shelves, viewModel, onOpen, Modifier.weight(1f))
             }
         }

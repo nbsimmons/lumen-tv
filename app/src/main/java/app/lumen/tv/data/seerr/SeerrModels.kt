@@ -88,6 +88,15 @@ data class SeerrDetails(
 )
 
 @Serializable
+data class SeerrWatchlistRequest(val tmdbId: Int, val mediaType: String, val title: String? = null)
+
+@Serializable
+data class SeerrWatchlistEntry(val tmdbId: Int? = null, val mediaType: String? = null, val title: String? = null)
+
+@Serializable
+data class SeerrWatchlistPage(val results: List<SeerrWatchlistEntry> = emptyList())
+
+@Serializable
 data class SeerrCollectionRef(val id: Int, val name: String? = null, val posterPath: String? = null, val backdropPath: String? = null)
 
 @Serializable
@@ -107,7 +116,13 @@ data class SeerrDetailCredits(val cast: List<SeerrCastMember> = emptyList())
 data class SeerrCastMember(val id: Int, val name: String? = null, val character: String? = null, val profilePath: String? = null)
 
 @Serializable
-data class SeerrCompany(val name: String? = null)
+data class SeerrCompany(val id: Int? = null, val name: String? = null)
+
+@Serializable
+data class SeerrNamedId(val id: Int, val name: String? = null)
+
+@Serializable
+data class SeerrWatchProvider(val id: Int, val name: String? = null, val displayPriority: Int? = null)
 
 @Serializable
 data class SeerrReleases(val results: List<SeerrReleaseCountry> = emptyList())

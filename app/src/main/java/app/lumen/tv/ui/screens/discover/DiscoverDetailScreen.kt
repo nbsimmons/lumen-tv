@@ -78,6 +78,9 @@ import app.lumen.tv.ui.components.CastRow
 import app.lumen.tv.ui.components.CollectionShelf
 import app.lumen.tv.ui.components.LumenCard
 import app.lumen.tv.ui.components.ShelfRow
+import app.lumen.tv.ui.components.StudioLink
+import app.lumen.tv.data.model.StudioRef
+import app.lumen.tv.ui.components.RoundIconButton
 import app.lumen.tv.ui.components.SheetHeading
 import app.lumen.tv.ui.components.SheetRow
 import app.lumen.tv.ui.components.TitleLogo
@@ -100,6 +103,7 @@ fun DiscoverDetailScreen(
     onOpenDiscover: (DiscoverItem) -> Unit,
     onOpenFilm: (DiscoverItem) -> Unit,
     onOpenCollection: (Int, Boolean) -> Unit,
+    onOpenStudio: (StudioRef, DiscoverKind) -> Unit,
     onBack: () -> Unit,
     viewModel: DiscoverDetailViewModel = koinViewModel(key = "discover-$kind-$tmdbId") { parametersOf(kind, tmdbId) },
 ) {
@@ -151,6 +155,9 @@ fun DiscoverDetailScreen(
                             outcome = state.outcome,
                             pickingSeasons = state.sheetOpen,
                             onRequest = viewModel::onRequest,
+                            watchlisted = state.watchlisted,
+                            onToggleWatchlist = viewModel::toggleWatchlist,
+                            onOpenStudio = onOpenStudio,
                             onWatch = onWatch,
                         )
                     }
@@ -214,6 +221,9 @@ private fun Header(
     pickingSeasons: Boolean,
     onRequest: () -> Unit,
     onWatch: (UUID) -> Unit,
+    watchlisted: Boolean?,
+    onToggleWatchlist: () -> Unit,
+    onOpenStudio: (StudioRef, DiscoverKind) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val item = detail.item
@@ -292,10 +302,18 @@ private fun Header(
             }
             detail.trailer?.let { trailer ->
                 PillButton(
-                        text = stringResource(R.string.trailer_button),
-                        onClick = { onTrailer(trailer) },
-                        leading = { Icon(painterResource(R.drawable.ic_movie), contentDescription = null, modifier = Modifier.size(20.dp)) },
-                    )
+                    text = stringResource(R.string.trailer_button),
+                    onClick = { onTrailer(trailer) },
+                    leading = { Icon(painterResource(R.drawable.ic_movie), contentDescription = null, modifier = Modifier.size(20.dp)) },
+                )
+            }
+            watchlisted?.let { on ->
+                RoundIconButton(
+                    icon = if (on) R.drawable.ic_heart_filled else R.drawable.ic_heart,
+                    contentDescription = stringResource(if (on) R.string.discover_unwatchlist else R.string.discover_watchlist),
+                    onClick = onToggleWatchlist,
+                    active = on,
+                )
             }
         }
         outcome?.let {
@@ -308,7 +326,7 @@ private fun Header(
         }
         detail.studio?.let {
             Spacer(Modifier.height(LumenSpacing.M))
-            Text(it, style = MaterialTheme.typography.labelMedium, color = LumenColors.OnSurfaceFaint)
+            StudioLink(it, detail.studioRef?.let { ref -> { onOpenStudio(ref, item.kind) } })
         }
     }
 }

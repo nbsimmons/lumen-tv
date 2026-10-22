@@ -20,6 +20,35 @@ data class DiscoverItem(
     val jellyfinId: UUID?,
 )
 
+fun DiscoverItem.asMediaItem(): MediaItem = MediaItem(
+    id = jellyfinId ?: UUID.nameUUIDFromBytes("tmdb-$kind-$tmdbId".toByteArray()),
+    kind = if (kind == DiscoverKind.Series) MediaKind.Series else MediaKind.Movie,
+    title = title,
+    name = title,
+    subtitle = null,
+    overview = overview,
+    year = year,
+    officialRating = null,
+    communityRating = rating?.toFloat(),
+    runtimeMinutes = null,
+    genres = emptyList(),
+    progress = null,
+    resumeTicks = 0L,
+    played = false,
+    favorite = false,
+    posterUrl = posterUrl,
+    thumbUrl = backdropUrl,
+    backdropUrl = backdropUrl,
+    logoUrl = null,
+    seriesId = null,
+    seasonId = null,
+    indexNumber = null,
+    parentIndexNumber = null,
+    unplayedCount = null,
+    tmdbId = tmdbId,
+    remote = jellyfinId == null,
+)
+
 data class DiscoverSeason(
     val number: Int,
     val name: String,
@@ -37,6 +66,7 @@ data class DiscoverDetail(
     val trailer: Trailer.YouTube?,
     val certification: String? = null,
     val studio: String? = null,
+    val studioRef: StudioRef? = null,
     val cast: List<DiscoverCast> = emptyList(),
     val collection: CollectionRef? = null,
 )
@@ -52,6 +82,21 @@ data class MovieCollection(
     val missing: List<DiscoverItem> get() = parts.filter { it.availability == Availability.None }
     val available: Int get() = parts.count { it.availability == Availability.Available || it.availability == Availability.PartiallyAvailable }
 }
+
+@kotlinx.serialization.Serializable
+data class StudioRef(val tmdbId: Int, val name: String, val network: Boolean)
+
+data class Option(val id: Int, val name: String)
+
+enum class BrowseSort(val seerrValue: String) { Popular("popularity.desc"), TopRated("vote_average.desc"), Newest("primary_release_date.desc") }
+
+data class BrowseQuery(
+    val kind: DiscoverKind,
+    val genre: Option? = null,
+    val provider: Option? = null,
+    val studio: StudioRef? = null,
+    val sort: BrowseSort = BrowseSort.Popular,
+)
 
 data class DiscoverCast(val tmdbId: Int, val name: String, val role: String?, val imageUrl: String?)
 

@@ -8,6 +8,8 @@ import app.lumen.tv.data.collections.CollectionIndex
 import app.lumen.tv.data.logos.TitleLogos
 import app.lumen.tv.ui.screens.collections.CollectionViewModel
 import app.lumen.tv.ui.screens.collections.CollectionsViewModel
+import app.lumen.tv.ui.screens.browse.BrowseViewModel
+import app.lumen.tv.data.model.BrowseQuery
 import app.lumen.tv.data.jellyfin.JellyfinClient
 import app.lumen.tv.data.jellyfin.JellyfinRepository
 import app.lumen.tv.data.session.SecureCipher
@@ -72,7 +74,7 @@ val appModule = module {
     single { PlaybackRepository(get(), get(), get(), get(), get(), get()) }
     viewModel { RootViewModel(get(), get(), get(), get()) }
     viewModel { OnboardingViewModel(get(), get(), get()) }
-    viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { (kind: MediaKind) -> LibraryViewModel(kind, get()) }
     viewModel { params -> DetailViewModel(params.get(), params.getOrNull(), get(), get(), get(), get()) }
     createTrailerResolver()?.let { resolver -> single<TrailerStreamResolver> { resolver } }
@@ -95,6 +97,7 @@ val appModule = module {
     viewModel { DiscoverViewModel(get()) }
     viewModel { SeerrConnectViewModel(get(), get(), get()) }
     viewModel { CollectionsViewModel(get(), get()) }
+    viewModel { (query: BrowseQuery) -> BrowseViewModel(query, get(), get()) }
     viewModel { (tmdbId: Int, openRequest: Boolean) -> CollectionViewModel(tmdbId, openRequest, get()) }
     viewModel { (kind: DiscoverKind, tmdbId: Int) -> DiscoverDetailViewModel(kind, tmdbId, get()) }
     viewModel { SearchViewModel(get(), get(), get()) }

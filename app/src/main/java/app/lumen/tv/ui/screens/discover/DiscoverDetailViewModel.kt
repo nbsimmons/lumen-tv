@@ -35,6 +35,7 @@ data class DiscoverDetailState(
     val ratings: ExternalRatings? = null,
     val similar: List<DiscoverItem> = emptyList(),
     val collection: MovieCollection? = null,
+    val watchlisted: Boolean? = null,
 ) {
     val server: RequestServer? get() = options?.servers?.firstOrNull { it.id == serverId }
     val serversForVersion: List<RequestServer> get() = options?.servers.orEmpty().filter { it.is4k == want4k }
@@ -60,7 +61,19 @@ class DiscoverDetailViewModel(
         }
     }
 
+    fun toggleWatchlist() {
+        val item = _state.value.detail?.item ?: return
+        val next = _state.value.watchlisted != true
+        _state.update { it.copy(watchlisted = next) }
+        viewModelScope.launch {
+            runCatching { seerr.setWatchlisted(item, next) }.onFailure { _state.update { it.copy(watchlisted = !next) } }
+        }
+    }
+
     private fun load() {
+        viewModelScope.launch {
+            runCatching { seerr.isWatchlisted(kind, tmdbId) }.onSuccess { on -> _state.update { it.copy(watchlisted = on) } }
+        }
         viewModelScope.launch {
             runCatching { seerr.detail(kind, tmdbId) }
                 .onSuccess { detail ->

@@ -2,7 +2,11 @@ package app.lumen.tv.data.seerr
 
 import app.lumen.tv.data.jellyfin.JellyfinClient
 import app.lumen.tv.data.model.Availability
+import app.lumen.tv.data.model.BrowseQuery
+import app.lumen.tv.data.model.BrowseSort
 import app.lumen.tv.data.model.CollectionRef
+import app.lumen.tv.data.model.Option
+import app.lumen.tv.data.model.StudioRef
 import app.lumen.tv.data.model.MovieCollection
 import app.lumen.tv.data.model.DiscoverCast
 import app.lumen.tv.data.model.DiscoverDetail
@@ -33,6 +37,7 @@ import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -174,6 +179,45 @@ class SeerrRepository(
         _connected.value = false
     }
 
+    suspend fun studioOf(kind: DiscoverKind, tmdbId: Int): StudioRef? = studioRef(detailsFor(kind, tmdbId))
+
+    private fun studioRef(details: SeerrDetails): StudioRef? {
+        details.networks.orEmpty().firstOrNull { it.id != null && !it.name.isNullOrBlank() }?.let { return StudioRef(it.id!!, it.name!!, network = true) }
+        return details.productionCompanies.orEmpty().firstOrNull { it.id != null && !it.name.isNullOrBlank() }?.let { StudioRef(it.id!!, it.name!!, network = false) }
+    }
+
+    private val genreCache = ConcurrentHashMap<DiscoverKind, List<Option>>()
+    private val providerCache = ConcurrentHashMap<DiscoverKind, List<Option>>()
+
+    suspend fun genres(kind: DiscoverKind): List<Option> = genreCache[kind] ?: authed<List<SeerrNamedId>>(if (kind == DiscoverKind.Movie) "genres/movie" else "genres/tv")
+        .mapNotNull { genre -> genre.name?.let { Option(genre.id, it) } }
+        .also { genreCache[kind] = it }
+
+    suspend fun providers(kind: DiscoverKind): List<Option> = providerCache[kind] ?: authed<List<SeerrWatchProvider>>(if (kind == DiscoverKind.Movie) "watchproviders/movies" else "watchproviders/tv") {
+        parameter("watchRegion", WATCH_REGION)
+    }.sortedBy { it.displayPriority ?: Int.MAX_VALUE }
+        .mapNotNull { provider -> provider.name?.let { Option(provider.id, it) } }
+        .take(MAX_PROVIDERS)
+        .also { providerCache[kind] = it }
+
+    suspend fun browse(query: BrowseQuery, page: Int): Pair<List<DiscoverItem>, Boolean> {
+        val movie = query.kind == DiscoverKind.Movie
+        val body = authed<SeerrPage>(if (movie) "discover/movies" else "discover/tv") {
+            parameter("page", page)
+            parameter("sortBy", if (!movie && query.sort == BrowseSort.Newest) "first_air_date.desc" else query.sort.seerrValue)
+            query.genre?.let { parameter("genre", it.id) }
+            query.provider?.let {
+                parameter("watchProviders", it.id)
+                parameter("watchRegion", WATCH_REGION)
+            }
+            query.studio?.let { parameter(if (it.network) "network" else "studio", it.tmdbId) }
+            if (query.sort == BrowseSort.TopRated) parameter("voteCountGte", MIN_VOTES_FOR_TOP)
+        }
+        val mediaType = if (movie) "movie" else "tv"
+        val items = body.results.mapNotNull { toItem(it.copy(mediaType = it.mediaType ?: mediaType)) }
+        return items to ((body.page ?: page) < (body.totalPages ?: page))
+    }
+
     suspend fun browseShelves(): List<DiscoverShelf> = coroutineScope {
         val sources = listOf(
             DiscoverShelfKind.Trending to "discover/trending",
@@ -289,6 +333,7 @@ class SeerrRepository(
             certification = certificationOf(details),
             collection = details.collection?.let(::collectionRef),
             studio = (details.networks ?: details.productionCompanies).orEmpty().firstNotNullOfOrNull { it.name?.takeIf(String::isNotBlank) },
+            studioRef = studioRef(details),
             cast = details.credits?.cast.orEmpty().take(MAX_CAST).mapNotNull { member ->
                 member.name?.let { DiscoverCast(member.id, it, member.character?.takeIf(String::isNotBlank), member.profilePath?.let { path -> PROFILE + path }) }
             },
@@ -297,6 +342,34 @@ class SeerrRepository(
 
     suspend fun status(kind: DiscoverKind, tmdbId: Int): Availability? =
         runCatching { detail(kind, tmdbId).item.availability }.getOrNull()
+
+    @Volatile
+    private var watchlistKeys: Set<Pair<DiscoverKind, Int>>? = null
+
+    suspend fun watchlist(): List<DiscoverItem> = coroutineScope {
+        val entries = authed<SeerrWatchlistPage>("discover/watchlist") { parameter("page", 1) }.results
+        val keys = entries.mapNotNull { entry -> entry.tmdbId?.let { kindOf(entry.mediaType) to it } }
+        watchlistKeys = keys.toSet()
+        keys.map { (kind, id) -> async { runCatching { toItem(detailsFor(kind, id), kind) }.getOrNull() } }.awaitAll().filterNotNull()
+    }
+
+    suspend fun isWatchlisted(kind: DiscoverKind, tmdbId: Int): Boolean {
+        val keys = watchlistKeys ?: runCatching { watchlist() }.map { watchlistKeys.orEmpty() }.getOrDefault(emptySet())
+        return (kind to tmdbId) in keys
+    }
+
+    suspend fun setWatchlisted(item: DiscoverItem, watchlisted: Boolean) {
+        val type = if (item.kind == DiscoverKind.Movie) "movie" else "tv"
+        if (watchlisted) {
+            authedSend("watchlist", SeerrWatchlistRequest(item.tmdbId, type, item.title))
+        } else {
+            authedDelete("watchlist/${item.tmdbId}") { parameter("mediaType", type) }
+        }
+        watchlistKeys = watchlistKeys.orEmpty().let { if (watchlisted) it + (item.kind to item.tmdbId) else it - (item.kind to item.tmdbId) }
+        _changes.tryEmit(Unit)
+    }
+
+    private fun kindOf(mediaType: String?) = if (mediaType == "tv") DiscoverKind.Series else DiscoverKind.Movie
 
     suspend fun collectionOf(movieTmdbId: Int): CollectionRef? =
         detailsFor(DiscoverKind.Movie, movieTmdbId).collection?.let(::collectionRef)
@@ -477,6 +550,27 @@ class SeerrRepository(
         }
     }
 
+    private suspend inline fun <reified B : Any> authedSend(path: String, payload: B) {
+        val current = session ?: throw SeerrNotConnected()
+        guard {
+            http.post("${current.url}/api/v1/$path") {
+                header(HttpHeaders.Cookie, current.cookie)
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+        }
+    }
+
+    private suspend fun authedDelete(path: String, block: HttpRequestBuilder.() -> Unit = {}) {
+        val current = session ?: throw SeerrNotConnected()
+        guard {
+            http.delete("${current.url}/api/v1/$path") {
+                header(HttpHeaders.Cookie, current.cookie)
+                block()
+            }
+        }
+    }
+
     private suspend fun authedPost(path: String, payload: SeerrCreateRequest) {
         val current = session ?: throw SeerrNotConnected()
         guard {
@@ -550,6 +644,9 @@ class SeerrRepository(
 
     private companion object {
         const val REQUEST_DECLINED = 3
+        const val MAX_PROVIDERS = 30
+        const val MIN_VOTES_FOR_TOP = 200
+        val WATCH_REGION: String = java.util.Locale.getDefault().country.takeIf { it.length == 2 } ?: "GB"
         const val REQUESTS_PER_HOST = 10
         const val MAX_CAST = 20
         val CERT_REGIONS = listOf("GB", "US")

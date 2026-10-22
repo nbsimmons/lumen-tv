@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import app.lumen.tv.StartupWork
 import app.lumen.tv.data.jellyfin.JellyfinRepository
 import app.lumen.tv.data.model.ExternalRatings
+import app.lumen.tv.data.model.HOME_WATCHLIST
 import app.lumen.tv.data.model.MediaItem
+import app.lumen.tv.data.model.asMediaItem
+import app.lumen.tv.data.seerr.SeerrRepository
 import app.lumen.tv.data.ratings.MediaRatings
 import app.lumen.tv.data.model.Shelf
 import app.lumen.tv.data.model.ShelfKind
@@ -40,6 +43,7 @@ class HomeViewModel(
     private val settings: SettingsStore,
     private val ratings: MediaRatings,
     private val startup: StartupWork,
+    private val seerr: SeerrRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow<HomeState>(HomeState.Loading)
     val state: StateFlow<HomeState> = _state.asStateFlow()
@@ -65,6 +69,8 @@ class HomeViewModel(
             }
         }
         viewModelScope.launch { events.stopped.collect { refresh() } }
+        viewModelScope.launch { repository.changes.collect { refresh() } }
+        viewModelScope.launch { seerr.changes.collect { loadWatchlist(settings.hiddenSections.first()) } }
         viewModelScope.launch { settings.hiddenSections.drop(1).distinctUntilChanged().collect { refresh() } }
     }
 
@@ -75,6 +81,7 @@ class HomeViewModel(
                 val cached = runCatching { repository.cachedHome() }.getOrNull()?.filter { it.key !in hidden }
                 if (cached.isNullOrEmpty()) _state.value = HomeState.Loading else publish(cached)
             }
+            launch { loadWatchlist(hidden) }
             runCatching { repository.homeShelves(hidden) }
                 .onSuccess {
                     publish(it)
@@ -87,12 +94,32 @@ class HomeViewModel(
         }
     }
 
+    private var watchlist: Shelf? = null
+
     private fun publish(shelves: List<Shelf>) {
-        _state.value = HomeState.Content(shelves)
+        val base = shelves.filterNot { it.kind == ShelfKind.Watchlist }
+        val insertAt = base.indexOfLast { it.kind == ShelfKind.ContinueWatching || it.kind == ShelfKind.NextUp } + 1
+        val merged = watchlist?.let { base.toMutableList().apply { add(insertAt, it) } } ?: base
+        _state.value = HomeState.Content(merged)
         val current = _focused.value
         _focused.value = current?.let { focused -> shelves.firstNotNullOfOrNull { shelf -> shelf.items.firstOrNull { it.id == focused.id } } }
             ?: current
             ?: shelves.firstOrNull()?.items?.firstOrNull()
+    }
+
+    private suspend fun loadWatchlist(hidden: Set<String>) {
+        if (HOME_WATCHLIST in hidden) {
+            watchlist = null
+            return
+        }
+        val favourites = runCatching { repository.favourites() }.getOrDefault(emptyList())
+        seerr.restore()
+        val wanted = if (seerr.connected.value == true) runCatching { seerr.watchlist() }.getOrDefault(emptyList()) else emptyList()
+        val ownedIds = favourites.map { it.id }.toSet()
+        val ownedTmdb = favourites.mapNotNull { it.tmdbId }.toSet()
+        val extra = wanted.filterNot { it.tmdbId in ownedTmdb || it.jellyfinId in ownedIds }.map { it.asMediaItem() }
+        watchlist = Shelf(HOME_WATCHLIST, ShelfKind.Watchlist, null, favourites + extra).takeIf { it.items.isNotEmpty() }
+        (_state.value as? HomeState.Content)?.let { publish(it.shelves) }
     }
 
     fun removeFromContinueWatching(item: MediaItem) = mutate(item) { repository.clearResume(item.id) }

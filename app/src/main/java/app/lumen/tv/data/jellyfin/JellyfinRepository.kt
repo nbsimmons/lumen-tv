@@ -1,8 +1,11 @@
 package app.lumen.tv.data.jellyfin
 
+import app.lumen.tv.data.model.HOME_WATCHLIST
 import app.lumen.tv.data.model.HomeSection
 import app.lumen.tv.data.model.ItemDetail
+import app.lumen.tv.data.model.LibraryFilter
 import app.lumen.tv.data.model.LibraryPage
+import app.lumen.tv.data.model.WatchFilter
 import app.lumen.tv.data.model.LibraryView
 import app.lumen.tv.data.model.LibrarySort
 import app.lumen.tv.data.model.MediaItem
@@ -14,12 +17,17 @@ import app.lumen.tv.data.model.Shelf
 import app.lumen.tv.data.model.Trailer
 import app.lumen.tv.data.model.ShelfKind
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import org.jellyfin.sdk.api.client.extensions.genreApi
 import org.jellyfin.sdk.api.client.extensions.imageApi
+import org.jellyfin.sdk.model.api.request.GetGenresRequest
 import org.jellyfin.sdk.api.client.extensions.libraryApi
 import org.jellyfin.sdk.api.client.extensions.personApi
 import org.jellyfin.sdk.api.client.extensions.showApi
@@ -60,7 +68,11 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
         homeCache.read(userId)?.shelves?.takeIf { it.isNotEmpty() }?.also { shelves -> shelves.forEach { it.items.forEach(::remember) } }
 
     suspend fun homeSections(): List<HomeSection> =
-        listOf(HomeSection(KEY_RESUME, ShelfKind.ContinueWatching, null), HomeSection(KEY_NEXT_UP, ShelfKind.NextUp, null)) +
+        listOf(
+            HomeSection(KEY_RESUME, ShelfKind.ContinueWatching, null),
+            HomeSection(KEY_NEXT_UP, ShelfKind.NextUp, null),
+            HomeSection(HOME_WATCHLIST, ShelfKind.Watchlist, null),
+        ) +
             libraryViews().flatMap { view ->
                 listOfNotNull(
                     HomeSection("latest-${view.id}", ShelfKind.RecentlyAdded, view.name),
@@ -269,6 +281,52 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
         )
     }
 
+    suspend fun favourites(): List<MediaItem> = client.io {
+        client.api.libraryApi.getItems(
+            GetItemsRequest(
+                userId = userId,
+                includeItemTypes = listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
+                recursive = true,
+                isFavorite = true,
+                sortBy = listOf(ItemSortBy.DATE_CREATED),
+                sortOrder = listOf(SortOrder.DESCENDING),
+                fields = FIELDS,
+                enableUserData = true,
+                imageTypeLimit = 1,
+                enableImageTypes = IMAGE_TYPES,
+                limit = SHELF_LIMIT,
+            ),
+        ).content.items
+    }.map(::toMediaItem)
+
+    suspend fun byStudio(name: String): List<MediaItem> = client.io {
+        client.api.libraryApi.getItems(
+            GetItemsRequest(
+                userId = userId,
+                includeItemTypes = listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
+                recursive = true,
+                studios = listOf(name),
+                sortBy = listOf(ItemSortBy.PREMIERE_DATE),
+                sortOrder = listOf(SortOrder.DESCENDING),
+                fields = FIELDS,
+                enableUserData = true,
+                imageTypeLimit = 1,
+                enableImageTypes = IMAGE_TYPES,
+                limit = SHELF_LIMIT,
+            ),
+        ).content.items
+    }.map(::toMediaItem)
+
+    suspend fun genres(kind: MediaKind): List<String> = client.io {
+        client.api.genreApi.getGenres(
+            GetGenresRequest(
+                userId = userId,
+                includeItemTypes = listOf(if (kind == MediaKind.Series) BaseItemKind.SERIES else BaseItemKind.MOVIE),
+                sortBy = listOf(ItemSortBy.SORT_NAME),
+            ),
+        ).content.items
+    }.mapNotNull { it.name?.takeIf(String::isNotBlank) }
+
     suspend fun allMovies(): List<MediaItem> = client.io {
         client.api.libraryApi.getItems(
             GetItemsRequest(
@@ -284,7 +342,7 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
         ).content.items
     }.map(::toMediaItem)
 
-    suspend fun library(kind: MediaKind, sort: LibrarySort, start: Int, limit: Int): LibraryPage {
+    suspend fun library(kind: MediaKind, sort: LibrarySort, start: Int, limit: Int, filter: LibraryFilter = LibraryFilter()): LibraryPage {
         val (sortBy, order) = when (sort) {
             LibrarySort.Title -> ItemSortBy.SORT_NAME to SortOrder.ASCENDING
             LibrarySort.DateAdded -> ItemSortBy.DATE_CREATED to SortOrder.DESCENDING
@@ -306,6 +364,15 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
                     startIndex = start,
                     limit = limit,
                     enableTotalRecordCount = true,
+                    genres = filter.genre?.let(::listOf),
+                    isPlayed = when (filter.watched) {
+                        WatchFilter.All -> null
+                        WatchFilter.Unwatched -> false
+                        WatchFilter.Watched -> true
+                    },
+                    years = filter.decade?.let { (it until it + 10).toList() },
+                    minCommunityRating = filter.minRating?.toDouble(),
+                    is4k = if (filter.uhdOnly) true else null,
                 ),
             ).content
         }
@@ -430,9 +497,13 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
         }
     }.getOrNull()?.let(::toMediaItem)
 
+    private val _changes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val changes: SharedFlow<Unit> = _changes.asSharedFlow()
+
     suspend fun setPlayed(id: UUID, played: Boolean) = client.io {
         if (played) client.api.userDataApi.markPlayedItem(itemId = id, userId = userId)
         else client.api.userDataApi.markUnplayedItem(itemId = id, userId = userId)
+        _changes.tryEmit(Unit)
         Unit
     }
 
@@ -448,6 +519,7 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
     suspend fun setFavorite(id: UUID, favorite: Boolean) = client.io {
         if (favorite) client.api.userDataApi.markFavoriteItem(itemId = id, userId = userId)
         else client.api.userDataApi.unmarkFavoriteItem(itemId = id, userId = userId)
+        _changes.tryEmit(Unit)
         Unit
     }
 

@@ -43,6 +43,9 @@ import app.lumen.tv.ui.screens.detail.DetailScreen
 import app.lumen.tv.ui.screens.discover.DiscoverDetailScreen
 import app.lumen.tv.ui.screens.discover.DiscoverScreen
 import app.lumen.tv.ui.screens.search.SearchScreen
+import app.lumen.tv.ui.screens.browse.BrowseScreen
+import app.lumen.tv.data.model.BrowseQuery
+import app.lumen.tv.data.model.StudioRef
 import app.lumen.tv.ui.screens.collections.CollectionScreen
 import app.lumen.tv.ui.screens.collections.CollectionsScreen
 import app.lumen.tv.ui.screens.person.PersonScreen
@@ -98,6 +101,11 @@ private fun MainShell() {
     val openFilm: (DiscoverItem) -> Unit = { item ->
         navController.navigate(item.jellyfinId?.let { "item/$it" } ?: "discover/${item.kind.name}/${item.tmdbId}")
     }
+    val openBrowse: (BrowseQuery) -> Unit = { query ->
+        val studio = query.studio?.let { "&studio=${it.tmdbId}&studioName=${Uri.encode(it.name)}&network=${it.network}" }.orEmpty()
+        navController.navigate("browse?kind=${query.kind.name}$studio")
+    }
+    val openStudio: (StudioRef, DiscoverKind) -> Unit = { studio, kind -> openBrowse(BrowseQuery(kind, studio = studio)) }
     val openCollection: (Int, Boolean) -> Unit = { id, request -> navController.navigate("collection/$id?request=$request") }
     val play: (MediaItem, Long) -> Unit = { item, ticks -> navController.navigate("play/${item.id}?start=$ticks") }
     val context = LocalContext.current
@@ -150,7 +158,39 @@ private fun MainShell() {
                         live = LiveRequest(entry.arguments?.getString("key").orEmpty()),
                     )
                 }
-                composable(TopDestination.Discover.route) { DiscoverScreen(onOpen = openDiscover) }
+                composable(TopDestination.Discover.route) { DiscoverScreen(onOpen = openDiscover, onBrowse = { kind -> openBrowse(BrowseQuery(kind)) }) }
+                composable(
+                    route = "browse?kind={kind}&studio={studio}&studioName={studioName}&network={network}",
+                    arguments = listOf(
+                        navArgument("kind") {
+                            type = NavType.StringType
+                            defaultValue = DiscoverKind.Movie.name
+                        },
+                        navArgument("studio") {
+                            type = NavType.IntType
+                            defaultValue = -1
+                        },
+                        navArgument("studioName") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        },
+                        navArgument("network") {
+                            type = NavType.BoolType
+                            defaultValue = false
+                        },
+                    ),
+                ) { entry ->
+                    val args = entry.arguments
+                    val studioId = args?.getInt("studio") ?: -1
+                    BrowseScreen(
+                        initial = BrowseQuery(
+                            kind = DiscoverKind.valueOf(args?.getString("kind") ?: DiscoverKind.Movie.name),
+                            studio = if (studioId > 0) StudioRef(studioId, args?.getString("studioName").orEmpty(), args?.getBoolean("network") ?: false) else null,
+                        ),
+                        onOpen = openFilm,
+                        onOpenItem = openItem,
+                    )
+                }
                 composable(TopDestination.Search.route) {
                     SearchScreen(
                         onOpenItem = openItem,
@@ -229,6 +269,7 @@ private fun MainShell() {
                         onTrailer = playTrailer,
                         onOpenCollection = openCollection,
                         onOpenFilm = openFilm,
+                        onOpenStudio = openStudio,
                         onOpenPerson = { tmdb -> navController.navigate("person?tmdb=$tmdb") },
                         onOpenDiscover = { item ->
                             navController.navigate(item.jellyfinId?.let { "item/$it" } ?: "discover/${item.kind.name}/${item.tmdbId}")
@@ -258,6 +299,7 @@ private fun MainShell() {
                         onOpenPerson = { personId -> navController.navigate("person?jf=$personId") },
                         onOpenFilm = openFilm,
                         onOpenCollection = openCollection,
+                        onOpenStudio = openStudio,
                     )
                 }
                 composable(
@@ -305,5 +347,8 @@ private fun MainShell() {
     }
 }
 
-private fun detailRoute(item: MediaItem): String =
-    if (item.kind == MediaKind.Episode && item.seriesId != null) "item/${item.seriesId}?episode=${item.id}" else "item/${item.id}"
+private fun detailRoute(item: MediaItem): String = when {
+    item.remote -> "discover/${if (item.kind == MediaKind.Series) DiscoverKind.Series.name else DiscoverKind.Movie.name}/${item.tmdbId}"
+    item.kind == MediaKind.Episode && item.seriesId != null -> "item/${item.seriesId}?episode=${item.id}"
+    else -> "item/${item.id}"
+}

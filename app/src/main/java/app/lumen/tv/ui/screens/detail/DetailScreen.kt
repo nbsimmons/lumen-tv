@@ -55,6 +55,9 @@ import app.lumen.tv.data.model.Trailer
 import app.lumen.tv.ui.components.CardShape
 import app.lumen.tv.ui.components.CastEntry
 import app.lumen.tv.ui.components.CastRow
+import app.lumen.tv.ui.components.StudioLink
+import app.lumen.tv.data.model.StudioRef
+import app.lumen.tv.data.model.DiscoverKind
 import app.lumen.tv.ui.components.CollectionShelf
 import app.lumen.tv.data.model.DiscoverItem
 import app.lumen.tv.ui.components.HeroBackdrop
@@ -89,6 +92,7 @@ fun DetailScreen(
     onOpenPerson: (UUID) -> Unit,
     onOpenFilm: (DiscoverItem) -> Unit,
     onOpenCollection: (Int, Boolean) -> Unit,
+    onOpenStudio: (StudioRef, DiscoverKind) -> Unit,
     viewModel: DetailViewModel = koinViewModel(key = "detail-$itemId") { parametersOf(itemId, focusEpisodeId) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -127,6 +131,8 @@ fun DetailScreen(
                     onPlay = onPlay,
                     onToggleWatched = viewModel::togglePlayed,
                     onToggleFavorite = viewModel::toggleFavorite,
+                    studioRef = state.studio,
+                    onOpenStudio = onOpenStudio,
                     modifier = Modifier
                         .heightIn(min = headerMin)
                         .onFocusChanged { if (it.hasFocus) scope.launch { listState.animateScrollToItem(0) } },
@@ -186,6 +192,8 @@ private fun Header(
     onPlay: (MediaItem, Long) -> Unit,
     onToggleWatched: () -> Unit,
     onToggleFavorite: () -> Unit,
+    studioRef: StudioRef?,
+    onOpenStudio: (StudioRef, DiscoverKind) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val item = detail.item
@@ -276,7 +284,8 @@ private fun Header(
             }
             detail.studio?.let {
                 Spacer(Modifier.height(LumenSpacing.M))
-                Text(it, style = MaterialTheme.typography.labelMedium, color = LumenColors.OnSurfaceFaint)
+                val kind = if (item.kind == MediaKind.Series) DiscoverKind.Series else DiscoverKind.Movie
+                StudioLink(it, studioRef?.let { ref -> { onOpenStudio(ref, kind) } })
             }
         }
     }

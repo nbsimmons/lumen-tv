@@ -9,6 +9,7 @@ import app.lumen.tv.data.model.ItemDetail
 import app.lumen.tv.data.model.MediaItem
 import app.lumen.tv.data.model.MediaKind
 import app.lumen.tv.data.model.MovieCollection
+import app.lumen.tv.data.model.StudioRef
 import app.lumen.tv.data.model.Season
 import app.lumen.tv.data.model.Trailer
 import app.lumen.tv.data.seerr.SeerrRepository
@@ -37,6 +38,7 @@ data class DetailState(
     val ratings: ExternalRatings? = null,
     val trailer: Trailer? = null,
     val collection: MovieCollection? = null,
+    val studio: StudioRef? = null,
 )
 
 class DetailViewModel(
@@ -82,6 +84,7 @@ class DetailViewModel(
                     }
                     if (preview?.tmdbId == null || preview.tmdbId != detail.tmdbId) loadRatings(detail.item.kind, detail.tmdbId)
                     if (detail.item.kind == MediaKind.Movie) loadCollection(detail.tmdbId)
+                    loadStudio(detail.item.kind, detail.tmdbId)
                     if (detail.trailer == null) loadSeerrTrailer(detail)
                     if (!seriesLoaded && detail.item.kind == MediaKind.Series) launch { loadSeries() }
                 }
@@ -99,6 +102,15 @@ class DetailViewModel(
         viewModelScope.launch {
             seerr.restore()
             seerr.ratings(discoverKind(kind), tmdbId)?.let { ratings -> _state.update { it.copy(ratings = ratings) } }
+        }
+    }
+
+    private fun loadStudio(kind: MediaKind, tmdbId: Int?) {
+        tmdbId ?: return
+        viewModelScope.launch {
+            seerr.restore()
+            if (seerr.connected.value != true) return@launch
+            runCatching { seerr.studioOf(discoverKind(kind), tmdbId) }.getOrNull()?.let { studio -> _state.update { it.copy(studio = studio) } }
         }
     }
 

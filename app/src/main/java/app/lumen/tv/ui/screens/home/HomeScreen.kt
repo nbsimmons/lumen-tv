@@ -176,6 +176,7 @@ private fun shelfTitle(shelf: Shelf): String = homeSectionTitle(shelf.kind, shel
 fun homeSectionTitle(kind: ShelfKind, library: String?): String = when (kind) {
     ShelfKind.ContinueWatching -> stringResource(R.string.shelf_continue_watching)
     ShelfKind.NextUp -> stringResource(R.string.shelf_next_up)
+    ShelfKind.Watchlist -> stringResource(R.string.shelf_watchlist)
     ShelfKind.RecentlyAdded -> stringResource(R.string.shelf_recently_added, library.orEmpty())
     ShelfKind.NewReleases -> stringResource(R.string.shelf_new_releases, library.orEmpty())
 }

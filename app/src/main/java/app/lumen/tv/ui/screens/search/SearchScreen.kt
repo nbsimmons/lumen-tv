@@ -28,6 +28,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import app.lumen.tv.ui.components.RoundIconButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.speech.RecognizerIntent
+import android.content.Intent
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
@@ -176,28 +182,35 @@ fun SearchScreen(
         HeroBackdrop(url = state.highlight?.backdropUrl)
         Column(Modifier.fillMaxSize().padding(top = NavClearance)) {
             if (keyboard == SearchKeyboard.System) {
-                TvTextField(
-                    value = state.query,
-                    onValueChange = viewModel::replaceQuery,
-                    placeholder = stringResource(R.string.search_hint),
-                    imeAction = ImeAction.Search,
-                    width = null,
-                    shape = LumenShapes.Pill,
-                    containerColor = LumenColors.FieldFill,
-                    focusedContainerColor = LumenColors.FieldFillFocused,
-                    focusedScale = 1f,
-                    placeholderColor = LumenColors.OnSurfaceMuted,
-                    leading = {
-                        Icon(
-                            painterResource(R.drawable.ic_search),
-                            contentDescription = null,
-                            tint = LumenColors.OnSurfaceMuted,
-                            modifier = Modifier.size(24.dp),
-                        )
-                    },
-                    trailing = if (state.searching) ({ Spinner(size = 22.dp) }) else null,
-                    modifier = Modifier.padding(horizontal = LumenSpacing.SafeHorizontal).focusRequester(fieldFocus),
-                )
+                Row(
+                    Modifier.padding(horizontal = LumenSpacing.SafeHorizontal),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(LumenSpacing.M),
+                ) {
+                    TvTextField(
+                        value = state.query,
+                        onValueChange = viewModel::replaceQuery,
+                        placeholder = stringResource(R.string.search_hint),
+                        imeAction = ImeAction.Search,
+                        width = null,
+                        shape = LumenShapes.Pill,
+                        containerColor = LumenColors.FieldFill,
+                        focusedContainerColor = LumenColors.FieldFillFocused,
+                        focusedScale = 1f,
+                        placeholderColor = LumenColors.OnSurfaceMuted,
+                        leading = {
+                            Icon(
+                                painterResource(R.drawable.ic_search),
+                                contentDescription = null,
+                                tint = LumenColors.OnSurfaceMuted,
+                                modifier = Modifier.size(24.dp),
+                            )
+                        },
+                        trailing = if (state.searching) ({ Spinner(size = 22.dp) }) else null,
+                        modifier = Modifier.weight(1f).focusRequester(fieldFocus),
+                    )
+                    VoiceSearchButton(onResult = viewModel::replaceQuery)
+                }
             } else Row(
                 Modifier.fillMaxWidth().padding(horizontal = LumenSpacing.SafeHorizontal).height(52.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -510,5 +523,28 @@ private fun BoxScope.InLibraryBadge() {
             .padding(8.dp)
             .background(LumenColors.OnSurface, LumenShapes.Pill)
             .padding(horizontal = 8.dp, vertical = 2.dp),
+    )
+}
+
+@Composable
+private fun VoiceSearchButton(onResult: (String) -> Unit) {
+    val context = LocalContext.current
+    val available = remember {
+        context.packageManager.queryIntentActivities(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH), 0).isNotEmpty()
+    }
+    if (!available) return
+    val prompt = stringResource(R.string.search_voice_prompt)
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.takeIf { it.isNotBlank() }?.let(onResult)
+    }
+    RoundIconButton(
+        icon = R.drawable.ic_mic,
+        contentDescription = stringResource(R.string.search_voice),
+        onClick = {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                .putExtra(RecognizerIntent.EXTRA_PROMPT, prompt)
+            runCatching { launcher.launch(intent) }
+        },
     )
 }

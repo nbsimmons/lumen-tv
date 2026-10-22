@@ -3,6 +3,7 @@ package app.lumen.tv.ui.screens.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.lumen.tv.data.jellyfin.JellyfinRepository
+import app.lumen.tv.data.model.LibraryFilter
 import app.lumen.tv.data.model.LibrarySort
 import app.lumen.tv.data.model.MediaItem
 import app.lumen.tv.data.model.MediaKind
@@ -19,6 +20,8 @@ data class LibraryState(
     val total: Int? = null,
     val loading: Boolean = true,
     val error: Boolean = false,
+    val filter: LibraryFilter = LibraryFilter(),
+    val genres: List<String> = emptyList(),
 )
 
 class LibraryViewModel(
@@ -32,11 +35,20 @@ class LibraryViewModel(
 
     init {
         reload()
+        viewModelScope.launch {
+            runCatching { repository.genres(kind) }.onSuccess { genres -> _state.update { it.copy(genres = genres) } }
+        }
     }
 
     fun setSort(sort: LibrarySort) {
         if (sort == _state.value.sort) return
-        _state.value = LibraryState(sort = sort)
+        _state.update { it.copy(sort = sort) }
+        reload()
+    }
+
+    fun setFilter(filter: LibraryFilter) {
+        if (filter == _state.value.filter) return
+        _state.update { it.copy(filter = filter) }
         reload()
     }
 
@@ -56,11 +68,12 @@ class LibraryViewModel(
 
     private fun loadPage() {
         val sort = _state.value.sort
+        val filter = _state.value.filter
         val start = _state.value.items.size
         pageJob = viewModelScope.launch {
-            runCatching { repository.library(kind, sort, start, PAGE_SIZE) }
+            runCatching { repository.library(kind, sort, start, PAGE_SIZE, filter) }
                 .onSuccess { page ->
-                    if (_state.value.sort != sort) return@onSuccess
+                    if (_state.value.sort != sort || _state.value.filter != filter) return@onSuccess
                     _state.update { it.copy(items = it.items + page.items, total = page.total, loading = false) }
                 }
                 .onFailure { _state.update { it.copy(loading = false, error = it.items.isEmpty()) } }
