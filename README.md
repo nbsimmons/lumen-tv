@@ -38,13 +38,15 @@ The generator lives in `baselineprofile/` and only drives the app with remote pr
 
 The sideload build checks the GitHub repo in `lumen.updateRepo` (in `gradle.properties`) for a newer release when Home loads (at most every 6 hours) and from Settings › Check for Updates. The modern build downloads the `*-sideload.apk` asset and the legacy build the `*-legacy.apk` asset, checks that it's signed with the same key as the installed app, then hands it to Android's installer. Android always asks the viewer to confirm, and each device needs Lumen allowed to install unknown apps once.
 
-To publish a release (needs `gh auth login` first):
+To publish a release (needs `gh auth login` as the repo owner first):
 
 ```bash
 scripts/release.sh 0.2.0 notes.md
 ```
 
-It bumps the version in `gradle.properties`, builds and signs both APKs, refuses a debug-signed build, and creates the `v0.2.0` GitHub release with the APK and its SHA-256. Commit the version bump afterwards.
+It bumps the version in `gradle.properties`, commits it, creates an annotated `v0.2.0` tag with the notes as its message and pushes both. The **Release** workflow then builds both APKs on GitHub, signs them with the key stored in the repo's Actions secrets (`LUMEN_KEYSTORE_BASE64`, `LUMEN_STORE_PASSWORD`, `LUMEN_KEY_ALIAS`, `LUMEN_KEY_PASSWORD`), refuses a debug-signed build and publishes the release with both APKs, the fixed-name copies and the `.dm` profiles. Add `--local` to build and publish from this Mac instead. `LUMEN_DRY_RUN=1 scripts/package-release.sh notes.md` rehearses the packaging without publishing.
+
+The **Checks** workflow lints all three builds on every push to `main`.
 
 **Back up `~/.lumen/` somewhere safe** (a password manager or encrypted drive), never in this repo. If the key is lost, installed copies can't be updated and every device has to uninstall and reinstall.
 

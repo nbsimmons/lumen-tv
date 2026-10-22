@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the annotated tag
+        run: git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+
+      - name: Check the tag matches gradle.properties
+        run: |
+          version="$(grep '^lumen.versionName=' gradle.properties | cut -d= -f2)"
+          [[ "v$version" == "$GITHUB_REF_NAME" ]] || { echo "Tag $GITHUB_REF_NAME doesn't match lumen.versionName=$version"; exit 1; }
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Write signing config
+        env:
+          KEYSTORE: ${{ secrets.LUMEN_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.LUMEN_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.LUMEN_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.LUMEN_KEY_PASSWORD }}
+        run: |
+          [[ -n "$KEYSTORE" ]] || { echo "Signing secrets are missing"; exit 1; }
+          echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/lumen.keystore"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/lumen.keystore" "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > "$RUNNER_TEMP/signing.properties"
+
+      - name: Release notes from the tag
+        run: git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/^-----BEGIN PGP/,$d' > "$RUNNER_TEMP/notes.md"
+
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LUMEN_SIGNING: ${{ runner.temp }}/signing.properties
+        run: scripts/package-release.sh "$RUNNER_TEMP/notes.md"
+
+      - name: Remove signing files
+        if: always()
+        run: rm -f "$RUNNER_TEMP/lumen.keystore" "$RUNNER_TEMP/signing.properties"
