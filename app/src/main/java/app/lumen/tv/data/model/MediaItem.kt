@@ -37,6 +37,7 @@ data class MediaItem(
     val tmdbId: Int? = null,
     val lastPlayed: Long? = null,
     val remote: Boolean = false,
+    val collectionId: Int? = null,
 )
 
 data class Person(
@@ -63,8 +64,9 @@ data class ItemDetail(
 
 const val HOME_WATCHLIST = "watchlist"
 const val HOME_ARRIVALS = "arrivals"
+const val HOME_COLLECTIONS = "collections"
 
-enum class ShelfKind { Arrivals, ContinueWatching, NextUp, Watchlist, RecentlyAdded, NewReleases }
+enum class ShelfKind { Arrivals, ContinueWatching, NextUp, Watchlist, Collections, RecentlyAdded, NewReleases }
 
 data class HomeSection(val key: String, val kind: ShelfKind, val library: String?)
 

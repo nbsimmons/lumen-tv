@@ -8,6 +8,8 @@ import app.lumen.tv.data.model.HomeSection
 import app.lumen.tv.data.seerr.SeerrRepository
 import app.lumen.tv.data.settings.LumenSettings
 import app.lumen.tv.data.settings.SettingsStore
+import app.lumen.tv.data.settings.inHomeOrder
+import app.lumen.tv.data.settings.moved
 import app.lumen.tv.data.update.UpdateRepository
 import app.lumen.tv.data.logos.TitleLogos
 import app.lumen.tv.data.logos.TmdbKeyCheck
@@ -83,7 +85,8 @@ class SettingsViewModel(
     fun checkForUpdates() = updates.checkNow()
 
     private val _sections = MutableStateFlow<List<HomeSection>>(emptyList())
-    val sections: StateFlow<List<HomeSection>> = _sections.asStateFlow()
+    val sections: StateFlow<List<HomeSection>> = combine(_sections, store.homeOrder) { sections, order -> sections.inHomeOrder(order) { it.key } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val capabilities: DeviceCapabilities = profiles.capabilities
 
@@ -126,6 +129,15 @@ class SettingsViewModel(
         store.setSubtitles(all[(all.indexOf(state.value.settings.subtitles) + 1) % all.size])
     }
 
+    fun moveSection(key: String, delta: Int) = viewModelScope.launch {
+        store.setHomeOrder(sections.value.map { it.key }.moved(key, delta))
+    }
+
+    fun cycleScreensaver() = viewModelScope.launch {
+        val current = state.value.settings.screensaverMinutes
+        store.setScreensaverMinutes(SCREENSAVER_CHOICES[(SCREENSAVER_CHOICES.indexOf(current) + 1).mod(SCREENSAVER_CHOICES.size)])
+    }
+
     fun toggleSection(key: String) = viewModelScope.launch {
         store.setSectionHidden(key, key !in state.value.hiddenSections)
     }
@@ -137,3 +149,5 @@ class SettingsViewModel(
         jellyfin.signOut()
     }
 }
+
+private val SCREENSAVER_CHOICES = listOf(0, 2, 5, 10, 15)

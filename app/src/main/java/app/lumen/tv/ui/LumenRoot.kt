@@ -70,6 +70,16 @@ import androidx.navigation.compose.rememberNavController
 import app.lumen.tv.ui.components.TopDestination
 import app.lumen.tv.ui.components.TopNav
 import app.lumen.tv.ui.components.UpdateDialog
+import app.lumen.tv.ui.components.Screensaver
+import app.lumen.tv.data.settings.SettingsStore
+import org.koin.compose.koinInject
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.ui.platform.LocalView
 import app.lumen.tv.ui.screens.home.HomeScreen
 import app.lumen.tv.ui.theme.LumenColors
 import app.lumen.tv.ui.screens.onboarding.OnboardingScreen
@@ -119,8 +129,45 @@ private fun MainShell() {
         }
     }
 
+    val settings: SettingsStore = koinInject()
+    val screensaverFlow = remember(settings) { settings.settings.map { it.screensaverMinutes } }
+    val screensaverMinutes by screensaverFlow.collectAsStateWithLifecycle(initialValue = 0)
+    val route = backStack?.destination?.route.orEmpty()
+    val playing = PLAYBACK_ROUTES.any { route.startsWith(it) }
+    val inputs = remember { MutableStateFlow(0L) }
+    var screensaver by remember { mutableStateOf(false) }
+    LaunchedEffect(screensaverMinutes, playing) {
+        screensaver = false
+        if (screensaverMinutes <= 0 || playing) return@LaunchedEffect
+        inputs.collectLatest {
+            delay(screensaverMinutes * MINUTE_MS)
+            screensaver = true
+        }
+    }
+    val view = LocalView.current
+    DisposableEffect(screensaverMinutes, screensaver, playing) {
+        val holdAwake = screensaverMinutes > 0 && !playing
+        if (holdAwake) view.keepScreenOn = true
+        onDispose { if (holdAwake) view.keepScreenOn = false }
+    }
+    LaunchedEffect(screensaver) {
+        if (!screensaver) return@LaunchedEffect
+        delay(SCREENSAVER_AWAKE_MS)
+        view.keepScreenOn = false
+    }
+
     CompositionLocalProvider(LocalNavFocused provides navFocused) {
-        Box(Modifier.fillMaxSize().background(LumenColors.Background)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(LumenColors.Background)
+                .onPreviewKeyEvent { event ->
+                    inputs.value = event.nativeKeyEvent.eventTime
+                    if (!screensaver) return@onPreviewKeyEvent false
+                    if (event.type == KeyEventType.KeyUp) screensaver = false
+                    true
+                },
+        ) {
             NavHost(
                 navController = navController,
                 startDestination = TopDestination.Home.route,
@@ -349,11 +396,19 @@ private fun MainShell() {
                 )
             }
             UpdateDialog()
+            AnimatedVisibility(visible = screensaver, enter = fadeIn(tween(LumenMotion.Slow)), exit = fadeOut()) {
+                Screensaver()
+            }
         }
     }
 }
 
+private val PLAYBACK_ROUTES = listOf("play/", "trailer/", "watch/")
+private const val MINUTE_MS = 60_000L
+private const val SCREENSAVER_AWAKE_MS = 60 * MINUTE_MS
+
 private fun detailRoute(item: MediaItem): String = when {
+    item.collectionId != null -> "collection/${item.collectionId}?request=false"
     item.remote -> "discover/${if (item.kind == MediaKind.Series) DiscoverKind.Series.name else DiscoverKind.Movie.name}/${item.tmdbId}"
     item.kind == MediaKind.Episode && item.seriesId != null -> "item/${item.seriesId}?episode=${item.id}"
     else -> "item/${item.id}"

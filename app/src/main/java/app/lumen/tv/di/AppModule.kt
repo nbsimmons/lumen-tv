@@ -75,7 +75,7 @@ val appModule = module {
     single { PlaybackRepository(get(), get(), get(), get(), get(), get()) }
     viewModel { RootViewModel(get(), get(), get(), get()) }
     viewModel { OnboardingViewModel(get(), get(), get()) }
-    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), androidContext()) }
     viewModel { (kind: MediaKind) -> LibraryViewModel(kind, get()) }
     viewModel { params -> DetailViewModel(params.get(), params.getOrNull(), get(), get(), get(), get()) }
     createTrailerResolver()?.let { resolver -> single<TrailerStreamResolver> { resolver } }

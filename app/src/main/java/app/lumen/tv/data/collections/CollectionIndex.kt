@@ -17,7 +17,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
 
-data class LibraryCollection(val ref: CollectionRef, val owned: Int)
+data class LibraryCollection(val ref: CollectionRef, val owned: Int, val watched: Int = 0)
 
 @Serializable
 private data class IndexFile(val entries: Map<Int, CollectionRef?> = emptyMap())
@@ -32,7 +32,9 @@ class CollectionIndex(
     private val lock = Mutex()
 
     suspend fun libraryCollections(): List<LibraryCollection> = lock.withLock {
-        val movies = jellyfin.allMovies().mapNotNull { it.tmdbId }.distinct()
+        val library = jellyfin.allMovies().filter { it.tmdbId != null }.distinctBy { it.tmdbId }
+        val movies = library.mapNotNull { it.tmdbId }
+        val played = library.filter { it.played }.mapNotNull { it.tmdbId }.toSet()
         val known = read().toMutableMap()
         val missing = movies.filterNot { it in known }
         if (missing.isNotEmpty()) {
@@ -45,9 +47,9 @@ class CollectionIndex(
             found.filterNotNull().forEach { (id, ref) -> known[id] = ref }
             write(known)
         }
-        movies.mapNotNull { known[it] }
-            .groupBy { it.tmdbId }
-            .map { (_, refs) -> LibraryCollection(refs.first(), refs.size) }
+        movies.mapNotNull { id -> known[id]?.let { it to (id in played) } }
+            .groupBy { it.first.tmdbId }
+            .map { (_, refs) -> LibraryCollection(refs.first().first, refs.size, refs.count { it.second }) }
             .sortedBy { it.ref.name.lowercase() }
     }
 

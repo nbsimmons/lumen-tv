@@ -40,6 +40,8 @@
     <string name="shelf_continue_watching">Continue Watching</string>
     <string name="shelf_watchlist">Watchlist</string>
     <string name="shelf_arrivals">Now Available · From Your Requests</string>
+    <string name="shelf_collections">Your Collections</string>
+    <string name="shelf_collection_progress">%1$d of %2$d watched</string>
     <string name="shelf_next_up">Up Next</string>
     <string name="shelf_recently_added">Recently Added to %1$s</string>
     <string name="shelf_new_releases">New Releases in %1$s</string>
@@ -278,6 +280,11 @@
     <string name="home_options_hint">Hold OK or press ☰ for options</string>
     <string name="home_hide_section">Hide “%1$s”</string>
     <string name="settings_home">Home Screen</string>
+    <string name="settings_screensaver">Screensaver</string>
+    <string name="settings_section_show">Show on Home</string>
+    <string name="settings_section_hide">Hide from Home</string>
+    <string name="settings_section_up">Move Up</string>
+    <string name="settings_section_down">Move Down</string>
     <string name="settings_section_shown">Shown</string>
     <string name="settings_section_hidden">Hidden</string>
     <string name="home_remove_continue">Remove from Continue Watching</string>

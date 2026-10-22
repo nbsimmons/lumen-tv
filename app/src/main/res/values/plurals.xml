@@ -44,4 +44,8 @@
         <item quantity="one">%d film in library</item>
         <item quantity="other">%d films in library</item>
     </plurals>
+    <plurals name="settings_minutes">
+        <item quantity="one">After %d minute</item>
+        <item quantity="other">After %d minutes</item>
+    </plurals>
 </resources>

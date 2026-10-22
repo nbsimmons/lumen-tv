@@ -1,6 +1,7 @@
 package app.lumen.tv.data.jellyfin
 
 import app.lumen.tv.data.model.HOME_ARRIVALS
+import app.lumen.tv.data.model.HOME_COLLECTIONS
 import app.lumen.tv.data.model.HOME_WATCHLIST
 import app.lumen.tv.data.model.HomeSection
 import app.lumen.tv.data.model.ItemDetail
@@ -74,6 +75,7 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
             HomeSection(KEY_RESUME, ShelfKind.ContinueWatching, null),
             HomeSection(KEY_NEXT_UP, ShelfKind.NextUp, null),
             HomeSection(HOME_WATCHLIST, ShelfKind.Watchlist, null),
+            HomeSection(HOME_COLLECTIONS, ShelfKind.Collections, null),
         ) +
             libraryViews().flatMap { view ->
                 listOfNotNull(
@@ -300,6 +302,22 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
             ),
         ).content.items
     }.map(::toMediaItem)
+
+    suspend fun screensaverItems(): List<MediaItem> = client.io {
+        client.api.libraryApi.getItems(
+            GetItemsRequest(
+                userId = userId,
+                includeItemTypes = listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
+                recursive = true,
+                imageTypes = listOf(ImageType.BACKDROP),
+                sortBy = listOf(ItemSortBy.RANDOM),
+                fields = FIELDS,
+                imageTypeLimit = 1,
+                enableImageTypes = IMAGE_TYPES,
+                limit = SCREENSAVER_ITEMS,
+            ),
+        ).content.items
+    }.map(::toMediaItem).filter { it.backdropUrl != null }
 
     suspend fun byStudio(name: String): List<MediaItem> = client.io {
         client.api.libraryApi.getItems(
@@ -532,6 +550,7 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
 
     private companion object {
         const val SHELF_LIMIT = 20
+        const val SCREENSAVER_ITEMS = 40
         const val RECENT_ITEMS = 400
         const val KEY_RESUME = "resume"
         const val KEY_NEXT_UP = "nextup"

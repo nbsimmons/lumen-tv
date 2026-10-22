@@ -6,6 +6,11 @@ import app.lumen.tv.StartupWork
 import app.lumen.tv.data.jellyfin.JellyfinRepository
 import app.lumen.tv.data.model.ExternalRatings
 import app.lumen.tv.data.model.HOME_ARRIVALS
+import app.lumen.tv.data.model.HOME_COLLECTIONS
+import app.lumen.tv.data.collections.CollectionIndex
+import android.content.Context
+import app.lumen.tv.R
+import java.util.UUID
 import app.lumen.tv.data.model.HOME_WATCHLIST
 import app.lumen.tv.data.model.Availability
 import app.lumen.tv.data.model.DiscoverKind
@@ -18,6 +23,7 @@ import app.lumen.tv.data.ratings.MediaRatings
 import app.lumen.tv.data.model.Shelf
 import app.lumen.tv.data.model.ShelfKind
 import app.lumen.tv.data.settings.SettingsStore
+import app.lumen.tv.data.settings.inHomeOrder
 import app.lumen.tv.playback.PlaybackEvents
 import app.lumen.tv.ui.components.ShelfFocusMemory
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,6 +55,8 @@ class HomeViewModel(
     private val ratings: MediaRatings,
     private val startup: StartupWork,
     private val seerr: SeerrRepository,
+    private val collections: CollectionIndex,
+    private val context: Context,
 ) : ViewModel() {
     private val _state = MutableStateFlow<HomeState>(HomeState.Loading)
     val state: StateFlow<HomeState> = _state.asStateFlow()
@@ -75,6 +83,12 @@ class HomeViewModel(
         }
         viewModelScope.launch { events.stopped.collect { refresh() } }
         viewModelScope.launch { repository.changes.collect { refresh() } }
+        viewModelScope.launch {
+            settings.homeOrder.collect { saved ->
+                order = saved
+                (_state.value as? HomeState.Content)?.let { publish(it.shelves) }
+            }
+        }
         viewModelScope.launch { seerr.changes.collect { loadWatchlist(settings.hiddenSections.first()) } }
         viewModelScope.launch { settings.hiddenSections.drop(1).distinctUntilChanged().collect { refresh() } }
     }
@@ -92,6 +106,7 @@ class HomeViewModel(
                 .onSuccess {
                     publish(it)
                     startup.afterHomeLoaded()
+                    loadCollections(hidden)
                 }
                 .onFailure {
                     if (_state.value !is HomeState.Content) _state.value = HomeState.Error
@@ -101,13 +116,17 @@ class HomeViewModel(
     }
 
     private var watchlist: Shelf? = null
+    private var order: List<String> = emptyList()
     private var arrivals: Shelf? = null
+    private var inProgress: Shelf? = null
 
     private fun publish(shelves: List<Shelf>) {
-        val base = shelves.filterNot { it.kind == ShelfKind.Watchlist || it.kind == ShelfKind.Arrivals }
+        val base = shelves.filterNot { it.kind == ShelfKind.Watchlist || it.kind == ShelfKind.Arrivals || it.kind == ShelfKind.Collections }
         val insertAt = base.indexOfLast { it.kind == ShelfKind.ContinueWatching || it.kind == ShelfKind.NextUp } + 1
-        val merged = (watchlist?.let { base.toMutableList().apply { add(insertAt, it) } } ?: base)
+        val withCollections = inProgress?.let { shelf -> base.toMutableList().apply { add((insertAt).coerceAtMost(size), shelf) } } ?: base
+        val merged = (watchlist?.let { withCollections.toMutableList().apply { add(insertAt, it) } } ?: withCollections)
             .let { list -> arrivals?.let { listOf(it) + list } ?: list }
+            .inHomeOrder(order) { it.key }
         _state.value = HomeState.Content(merged)
         val current = _focused.value
         _focused.value = current?.let { focused -> shelves.firstNotNullOfOrNull { shelf -> shelf.items.firstOrNull { it.id == focused.id } } }
@@ -127,6 +146,53 @@ class HomeViewModel(
         val ownedTmdb = favourites.mapNotNull { it.tmdbId }.toSet()
         val extra = wanted.filterNot { it.tmdbId in ownedTmdb || it.jellyfinId in ownedIds }.map { it.asMediaItem() }
         watchlist = Shelf(HOME_WATCHLIST, ShelfKind.Watchlist, null, favourites + extra).takeIf { it.items.isNotEmpty() }
+        (_state.value as? HomeState.Content)?.let { publish(it.shelves) }
+    }
+
+    private suspend fun loadCollections(hidden: Set<String>) {
+        if (HOME_COLLECTIONS in hidden) {
+            inProgress = null
+            return
+        }
+        seerr.restore()
+        if (seerr.connected.value != true) return
+        val partway = runCatching { collections.libraryCollections() }.getOrNull()
+            ?.filter { it.watched in 1 until it.owned }
+            ?: return
+        inProgress = Shelf(
+            HOME_COLLECTIONS,
+            ShelfKind.Collections,
+            null,
+            partway.map { collection ->
+                MediaItem(
+                    id = UUID.nameUUIDFromBytes("collection-${collection.ref.tmdbId}".toByteArray()),
+                    kind = MediaKind.Other,
+                    title = collection.ref.name,
+                    name = collection.ref.name,
+                    subtitle = context.getString(R.string.shelf_collection_progress, collection.watched, collection.owned),
+                    overview = null,
+                    year = null,
+                    officialRating = null,
+                    communityRating = null,
+                    runtimeMinutes = null,
+                    genres = emptyList(),
+                    progress = collection.watched.toFloat() / collection.owned,
+                    resumeTicks = 0L,
+                    played = false,
+                    favorite = false,
+                    posterUrl = collection.ref.posterUrl,
+                    thumbUrl = collection.ref.backdropUrl,
+                    backdropUrl = collection.ref.backdropUrl,
+                    logoUrl = null,
+                    seriesId = null,
+                    seasonId = null,
+                    indexNumber = null,
+                    parentIndexNumber = null,
+                    unplayedCount = null,
+                    collectionId = collection.ref.tmdbId,
+                )
+            },
+        ).takeIf { partway.isNotEmpty() }
         (_state.value as? HomeState.Content)?.let { publish(it.shelves) }
     }
 

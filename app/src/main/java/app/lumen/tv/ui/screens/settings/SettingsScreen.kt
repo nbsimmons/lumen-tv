@@ -36,6 +36,10 @@ import androidx.tv.material3.Text
 import app.lumen.tv.BuildConfig
 import app.lumen.tv.data.update.UpdateState
 import app.lumen.tv.R
+import androidx.compose.ui.res.pluralStringResource
+import app.lumen.tv.ui.components.DialogOption
+import app.lumen.tv.ui.components.OptionsDialog
+import app.lumen.tv.data.model.HomeSection
 import app.lumen.tv.data.settings.StreamingQuality
 import app.lumen.tv.data.settings.SearchKeyboard
 import app.lumen.tv.data.settings.SubtitleMode
@@ -53,6 +57,7 @@ fun SettingsScreen(onOpenPrivacy: () -> Unit, viewModel: SettingsViewModel = koi
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     var confirmSignOut by remember { mutableStateOf(false) }
     var editingTmdb by remember { mutableStateOf(false) }
+    var editingSection by remember { mutableStateOf<HomeSection?>(null) }
     val tmdbKey by viewModel.tmdbKey.collectAsStateWithLifecycle()
     val tmdbCheck by viewModel.tmdbCheck.collectAsStateWithLifecycle()
     val tmdbSaving by viewModel.tmdbSaving.collectAsStateWithLifecycle()
@@ -92,7 +97,15 @@ fun SettingsScreen(onOpenPrivacy: () -> Unit, viewModel: SettingsViewModel = koi
                     SettingRow(
                         homeSectionTitle(section.kind, section.library),
                         stringResource(if (section.key in state.hiddenSections) R.string.settings_section_hidden else R.string.settings_section_shown),
-                        onClick = { viewModel.toggleSection(section.key) },
+                        onClick = { editingSection = section },
+                    )
+                }
+                item {
+                    SettingRow(
+                        stringResource(R.string.settings_screensaver),
+                        if (state.settings.screensaverMinutes == 0) stringResource(R.string.settings_off)
+                        else pluralStringResource(R.plurals.settings_minutes, state.settings.screensaverMinutes, state.settings.screensaverMinutes),
+                        onClick = viewModel::cycleScreensaver,
                     )
                 }
             }
@@ -195,6 +208,20 @@ fun SettingsScreen(onOpenPrivacy: () -> Unit, viewModel: SettingsViewModel = koi
                     modifier = Modifier.padding(LumenSpacing.M),
                 )
             }
+        }
+        editingSection?.let { section ->
+            val index = sections.indexOfFirst { it.key == section.key }
+            val hidden = section.key in state.hiddenSections
+            OptionsDialog(
+                title = homeSectionTitle(section.kind, section.library),
+                options = listOfNotNull(
+                    DialogOption(stringResource(if (hidden) R.string.settings_section_show else R.string.settings_section_hide)) { viewModel.toggleSection(section.key) },
+                    DialogOption(stringResource(R.string.settings_section_up)) { viewModel.moveSection(section.key, -1) }.takeIf { index > 0 },
+                    DialogOption(stringResource(R.string.settings_section_down)) { viewModel.moveSection(section.key, 1) }.takeIf { index in 0 until sections.lastIndex },
+                    DialogOption(stringResource(R.string.player_cancel)) {},
+                ),
+                onDismiss = { editingSection = null },
+            )
         }
         if (editingTmdb) {
             TmdbKeyDialog(

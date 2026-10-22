@@ -36,6 +36,7 @@ data class LumenSettings(
     val subtitles: SubtitleMode = SubtitleMode.ForcedOnly,
     val searchKeyboard: SearchKeyboard = SearchKeyboard.System,
     val autoSkipIntros: Boolean = false,
+    val screensaverMinutes: Int = 5,
 )
 
 @Serializable
@@ -55,6 +56,7 @@ class SettingsStore(context: Context) {
             subtitles = prefs[SUBTITLES]?.let { saved -> SubtitleMode.entries.firstOrNull { it.name == saved } } ?: SubtitleMode.ForcedOnly,
             searchKeyboard = prefs[SEARCH_KEYBOARD]?.let { saved -> SearchKeyboard.entries.firstOrNull { it.name == saved } } ?: SearchKeyboard.System,
             autoSkipIntros = prefs[AUTO_SKIP_INTROS] ?: false,
+            screensaverMinutes = prefs[SCREENSAVER_MINUTES] ?: 5,
         )
     }
 
@@ -113,6 +115,16 @@ class SettingsStore(context: Context) {
         store.edit { it[QUALITY] = quality.bitrate }
     }
 
+    suspend fun setScreensaverMinutes(minutes: Int) {
+        store.edit { it[SCREENSAVER_MINUTES] = minutes }
+    }
+
+    val homeOrder: Flow<List<String>> = store.data.map { prefs -> prefs[HOME_ORDER]?.split(ORDER_SEPARATOR)?.filter { it.isNotBlank() }.orEmpty() }
+
+    suspend fun setHomeOrder(order: List<String>) {
+        store.edit { it[HOME_ORDER] = order.joinToString(ORDER_SEPARATOR) }
+    }
+
     suspend fun setAutoSkipIntros(enabled: Boolean) {
         store.edit { it[AUTO_SKIP_INTROS] = enabled }
     }
@@ -159,6 +171,9 @@ class SettingsStore(context: Context) {
         val SUBTITLES = stringPreferencesKey("subtitle_mode")
         val SEARCH_KEYBOARD = stringPreferencesKey("search_keyboard")
         val AUTO_SKIP_INTROS = booleanPreferencesKey("auto_skip_intros")
+        val SCREENSAVER_MINUTES = intPreferencesKey("screensaver_minutes")
+        val HOME_ORDER = stringPreferencesKey("home_order")
+        const val ORDER_SEPARATOR = "\n"
         val TRACK_CHOICES = stringPreferencesKey("series_track_choices")
         val CHOICES_SERIALIZER = MapSerializer(String.serializer(), TrackChoice.serializer())
         const val MAX_TRACK_CHOICES = 200

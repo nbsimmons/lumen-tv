@@ -108,7 +108,7 @@ fun HomeScreen(
                     DialogOption(stringResource(R.string.home_remove_up_next)) { confirmReset = item }
                         .takeIf { shelf.kind == ShelfKind.NextUp && item.seriesId != null },
                     DialogOption(stringResource(R.string.detail_mark_watched)) { viewModel.markWatched(item) }
-                        .takeIf { !item.played },
+                        .takeIf { !item.played && !item.remote && item.collectionId == null },
                     DialogOption(stringResource(R.string.home_hide_section, sectionTitle), destructive = true) { viewModel.hideSection(shelf.key) },
                     DialogOption(stringResource(R.string.player_cancel)) {},
                 ),
@@ -156,7 +156,8 @@ private fun Shelves(
         LumenCard(
             modifier = cardModifier,
             title = item.title,
-            subtitle = if (landscape) item.subtitle else item.year?.toString(),
+            subtitle = if (landscape || kind == ShelfKind.Collections) item.subtitle else item.year?.toString(),
+            captionOnFocusOnly = !landscape && kind != ShelfKind.Collections,
             imageUrl = if (landscape) item.thumbUrl else item.posterUrl,
             shape = if (landscape) CardShape.Landscape else CardShape.Poster,
             progress = if (kind == ShelfKind.ContinueWatching) item.progress else null,
@@ -182,6 +183,7 @@ fun homeSectionTitle(kind: ShelfKind, library: String?): String = when (kind) {
     ShelfKind.ContinueWatching -> stringResource(R.string.shelf_continue_watching)
     ShelfKind.NextUp -> stringResource(R.string.shelf_next_up)
     ShelfKind.Arrivals -> stringResource(R.string.shelf_arrivals)
+    ShelfKind.Collections -> stringResource(R.string.shelf_collections)
     ShelfKind.Watchlist -> stringResource(R.string.shelf_watchlist)
     ShelfKind.RecentlyAdded -> stringResource(R.string.shelf_recently_added, library.orEmpty())
     ShelfKind.NewReleases -> stringResource(R.string.shelf_new_releases, library.orEmpty())
