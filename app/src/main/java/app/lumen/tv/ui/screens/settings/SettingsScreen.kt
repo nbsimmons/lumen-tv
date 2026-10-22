@@ -148,6 +148,13 @@ fun SettingsScreen(onOpenPrivacy: () -> Unit, viewModel: SettingsViewModel = koi
                     onClick = viewModel::toggleSearchKeyboard,
                 )
             }
+            item {
+                SettingRow(
+                    stringResource(R.string.settings_auto_skip),
+                    stringResource(if (state.settings.autoSkipIntros) R.string.settings_on else R.string.settings_off),
+                    onClick = viewModel::toggleAutoSkip,
+                )
+            }
 
             item { Section(stringResource(R.string.settings_about)) }
             item { SettingRow(stringResource(R.string.settings_version), BuildConfig.VERSION_NAME) }

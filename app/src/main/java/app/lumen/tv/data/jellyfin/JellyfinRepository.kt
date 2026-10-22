@@ -254,6 +254,7 @@ class JellyfinRepository(private val client: JellyfinClient, private val homeCac
             progress = dto.userData?.playedPercentage?.let { (it / 100.0).toFloat() },
             resumeTicks = dto.userData?.playbackPositionTicks ?: 0L,
             played = dto.userData?.played == true,
+            lastPlayed = dto.userData?.lastPlayedDate?.toInstant(java.time.ZoneOffset.UTC)?.toEpochMilli(),
             favorite = dto.userData?.isFavorite == true,
             posterUrl = poster,
             thumbUrl = thumb,

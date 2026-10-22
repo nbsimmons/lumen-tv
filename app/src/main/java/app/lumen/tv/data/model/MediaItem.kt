@@ -35,6 +35,7 @@ data class MediaItem(
     val parentIndexNumber: Int?,
     val unplayedCount: Int?,
     val tmdbId: Int? = null,
+    val lastPlayed: Long? = null,
 )
 
 data class Person(

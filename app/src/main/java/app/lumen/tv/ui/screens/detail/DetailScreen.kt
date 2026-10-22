@@ -266,6 +266,14 @@ private fun Header(
                     active = item.favorite,
                 )
             }
+            playTarget?.takeIf { it.resumeTicks > 0 }?.lastPlayed?.let { lastPlayed ->
+                Spacer(Modifier.height(LumenSpacing.M))
+                Text(
+                    stringResource(R.string.detail_resume_hint, formatPosition(playTarget.resumeTicks / TICKS_PER_MS), lastWatched(lastPlayed)),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LumenColors.OnSurfaceMuted,
+                )
+            }
             detail.studio?.let {
                 Spacer(Modifier.height(LumenSpacing.M))
                 Text(it, style = MaterialTheme.typography.labelMedium, color = LumenColors.OnSurfaceFaint)
@@ -273,6 +281,28 @@ private fun Header(
         }
     }
 }
+
+@Composable
+private fun lastWatched(epochMs: Long): String {
+    val then = java.time.Instant.ofEpochMilli(epochMs).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+    val days = java.time.temporal.ChronoUnit.DAYS.between(then, java.time.LocalDate.now()).toInt()
+    return when {
+        days <= 0 -> stringResource(R.string.detail_last_today)
+        days == 1 -> stringResource(R.string.detail_last_yesterday)
+        days < 7 -> then.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, androidx.core.os.ConfigurationCompat.getLocales(androidx.compose.ui.platform.LocalConfiguration.current)[0] ?: java.util.Locale.ENGLISH)
+        else -> then.format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))
+    }
+}
+
+private fun formatPosition(ms: Long): String {
+    val total = ms / 1000
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val s = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+private const val TICKS_PER_MS = 10_000L
 
 @Composable
 private fun playLabel(item: MediaItem, target: MediaItem, resuming: Boolean): String {

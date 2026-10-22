@@ -91,6 +91,13 @@ import androidx.tv.material3.Text
 import app.lumen.tv.R
 import app.lumen.tv.data.model.MediaItem
 import app.lumen.tv.data.model.MediaKind
+import app.lumen.tv.playback.SegmentType
+import app.lumen.tv.playback.Trickplay
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.draw.clip
 import app.lumen.tv.ui.components.PillButton
 import app.lumen.tv.ui.components.PillStyle
 import app.lumen.tv.ui.components.Spinner
@@ -109,6 +116,8 @@ private val LIVE_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm").
 private const val OVERLAY_TIMEOUT_MS = 5_000L
 private const val SEEK_MS = 10_000L
 private const val SEEK_LONG_MS = 30_000L
+private const val SCRUB_PREVIEW_MS = 1_500L
+private val TRICKPLAY_PREVIEW_WIDTH = 240.dp
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -139,6 +148,14 @@ fun PlayerScreen(
     val subtitlesButton = remember { FocusRequester() }
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var playWhenReady by remember { mutableStateOf(player.playWhenReady) }
+    var scrubToken by remember { mutableIntStateOf(0) }
+    var scrubbing by remember { mutableStateOf(false) }
+    LaunchedEffect(scrubToken) {
+        if (scrubToken == 0) return@LaunchedEffect
+        scrubbing = true
+        delay(SCRUB_PREVIEW_MS)
+        scrubbing = false
+    }
 
     val view = LocalView.current
     DisposableEffect(view) {
@@ -256,7 +273,11 @@ fun PlayerScreen(
                     return@onPreviewKeyEvent true
                 }
                 when (event.key.nativeKeyCode) {
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                        if (state.skip != null) viewModel.skipSegment() else viewModel.togglePlayPause()
+                        poke()
+                    }
+                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                         viewModel.togglePlayPause()
                         poke()
                     }
@@ -270,14 +291,17 @@ fun PlayerScreen(
                     }
                     KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> {
                         viewModel.seekBy(-(if (repeat) SEEK_LONG_MS else SEEK_MS))
+                        scrubToken++
                         poke()
                     }
                     KeyEvent.KEYCODE_DPAD_RIGHT -> {
                         viewModel.seekBy(if (repeat) SEEK_LONG_MS else SEEK_MS)
+                        scrubToken++
                         poke()
                     }
                     KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
                         viewModel.seekBy(SEEK_LONG_MS)
+                        scrubToken++
                         poke()
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
@@ -339,6 +363,7 @@ fun PlayerScreen(
                 player = player,
                 item = state.item,
                 trailerTitle = state.trailerTitle,
+                trickplay = state.trickplay.takeIf { scrubbing },
                 isPlaying = isPlaying,
                 viewModel = viewModel,
                 subtitlesButton = subtitlesButton,
@@ -354,6 +379,19 @@ fun PlayerScreen(
             modifier = Modifier.align(Alignment.CenterEnd),
         ) {
             TrackPanel(viewModel = viewModel, method = state.method, section = panelSection)
+        }
+
+        state.skip?.takeIf { state.upNext == null && !panelOpen && !state.error }?.let { segment ->
+            SkipButton(
+                type = segment.type,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = LumenSpacing.XXL, bottom = if (overlayVisible) 200.dp else LumenSpacing.XXL),
+            )
+        }
+
+        if (state.showStats) {
+            StatsOverlay(viewModel, Modifier.align(Alignment.TopStart).padding(LumenSpacing.XL))
         }
 
         state.upNext?.let { next ->
@@ -415,6 +453,7 @@ private fun ControlsOverlay(
     player: Player,
     item: MediaItem?,
     trailerTitle: String?,
+    trickplay: Trickplay?,
     isPlaying: Boolean,
     viewModel: PlayerViewModel,
     subtitlesButton: FocusRequester,
@@ -468,6 +507,10 @@ private fun ControlsOverlay(
                 Text(stringResource(R.string.trailer_label), style = MaterialTheme.typography.labelLarge, color = LumenColors.OnSurfaceMuted)
                 Text(trailerTitle, style = MaterialTheme.typography.headlineMedium, color = LumenColors.OnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(LumenSpacing.M))
+            }
+            trickplay?.takeIf { duration > 0 }?.let { preview ->
+                TrickplayPreview(preview, position, (position.toFloat() / duration).coerceIn(0f, 1f))
+                Spacer(Modifier.height(LumenSpacing.S))
             }
             ProgressTrack(position = position, buffered = buffered, duration = duration)
             Spacer(Modifier.height(LumenSpacing.S))
@@ -638,6 +681,16 @@ private fun TrackPanel(viewModel: PlayerViewModel, method: PlayMethod?, section:
                     onClick = { viewModel.select(option) },
                 )
             }
+            item {
+                PanelHeading(stringResource(R.string.player_info))
+            }
+            item {
+                TrackRow(
+                    label = stringResource(R.string.player_show_info),
+                    selected = viewModel.state.collectAsStateWithLifecycle().value.showStats,
+                    onClick = viewModel::toggleStats,
+                )
+            }
             method?.let {
                 item {
                     Text(
@@ -657,6 +710,106 @@ private fun TrackPanel(viewModel: PlayerViewModel, method: PlayMethod?, section:
         }
     }
 }
+
+@Composable
+private fun SkipButton(type: SegmentType, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .background(LumenColors.FocusFill, LumenShapes.Pill)
+            .padding(horizontal = 22.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            stringResource(
+                when (type) {
+                    SegmentType.Intro -> R.string.player_skip_intro
+                    SegmentType.Recap -> R.string.player_skip_recap
+                    SegmentType.Preview -> R.string.player_skip_preview
+                    SegmentType.Credits -> R.string.player_skip_credits
+                },
+            ),
+            style = MaterialTheme.typography.titleMedium,
+            color = LumenColors.OnFocusFill,
+        )
+        Text(stringResource(R.string.player_skip_hint), style = MaterialTheme.typography.labelMedium, color = LumenColors.OnFocusFill.copy(alpha = 0.6f))
+    }
+}
+
+@Composable
+private fun TrickplayPreview(trickplay: Trickplay, position: Long, fraction: Float) {
+    val frame = trickplay.frame(position)
+    val width = TRICKPLAY_PREVIEW_WIDTH
+    val height = width * trickplay.height / trickplay.width.coerceAtLeast(1)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val offset = ((maxWidth - width) * fraction).coerceAtLeast(0.dp)
+        Column(Modifier.offset(x = offset), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                Modifier
+                    .size(width, height)
+                    .clip(LumenShapes.Card)
+                    .border(2.dp, LumenColors.OnSurface, LumenShapes.Card)
+                    .background(LumenColors.Surface),
+            ) {
+                AsyncImage(
+                    model = frame.url,
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier
+                        .wrapContentSize(Alignment.TopStart, unbounded = true)
+                        .requiredSize(width * trickplay.columns, height * trickplay.rows)
+                        .offset(x = -width * frame.column, y = -height * frame.row),
+                )
+            }
+            Spacer(Modifier.height(LumenSpacing.XS))
+            Text(formatTime(position), style = MaterialTheme.typography.labelLarge, color = LumenColors.OnSurface)
+        }
+    }
+}
+
+@Composable
+private fun StatsOverlay(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
+    var stats by remember { mutableStateOf(viewModel.stats()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            stats = viewModel.stats()
+            delay(1_000)
+        }
+    }
+    val unknown = stringResource(R.string.player_info_unknown)
+    val rows = listOf(
+        stringResource(R.string.player_info_method) to when (stats.method) {
+            PlayMethod.DIRECT_PLAY -> stringResource(R.string.player_method_direct)
+            PlayMethod.DIRECT_STREAM -> stringResource(R.string.player_method_stream)
+            PlayMethod.TRANSCODE -> stringResource(R.string.player_method_transcode)
+            null -> unknown
+        },
+        stringResource(R.string.player_info_reason) to stats.transcodeReasons.joinToString(", ") { reasonLabel(it) }.ifEmpty { "—" },
+        stringResource(R.string.player_info_container) to (stats.container ?: unknown),
+        stringResource(R.string.player_info_video) to (stats.video ?: unknown),
+        stringResource(R.string.player_info_audio) to (stats.audio ?: unknown),
+        stringResource(R.string.player_info_bitrate) to (stats.bitrate?.takeIf { it > 0 }?.let { "%.1f Mbps".format(it / 1_000_000f) } ?: unknown),
+        stringResource(R.string.player_info_buffer) to stringResource(R.string.player_info_seconds, stats.bufferSeconds),
+        stringResource(R.string.player_info_dropped) to stats.droppedFrames.toString(),
+    )
+    Column(
+        modifier
+            .widthIn(max = 520.dp)
+            .background(Color.Black.copy(alpha = 0.72f), LumenShapes.Card)
+            .padding(LumenSpacing.M),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        rows.forEach { (label, value) ->
+            Row {
+                Text(label, style = MaterialTheme.typography.labelMedium, color = LumenColors.OnSurfaceFaint, modifier = Modifier.width(130.dp))
+                Text(value, style = MaterialTheme.typography.labelMedium, color = LumenColors.OnSurface)
+            }
+        }
+    }
+}
+
+private fun reasonLabel(reason: String): String =
+    reason.replace(Regex("([a-z])([A-Z])"), "$1 $2").replace("Not Supported", "not supported")
 
 @Composable
 private fun PanelHeading(text: String) {

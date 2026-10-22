@@ -24,7 +24,13 @@ import app.lumen.tv.BuildConfig
 import app.lumen.tv.data.model.MediaItem
 import app.lumen.tv.data.model.MediaKind
 import app.lumen.tv.playback.PlaybackRepository
+import app.lumen.tv.playback.PlaybackExtras
 import app.lumen.tv.playback.PlaybackSource
+import app.lumen.tv.playback.Segment
+import app.lumen.tv.playback.SegmentType
+import app.lumen.tv.playback.Trickplay
+import app.lumen.tv.data.settings.TrackChoice
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import app.lumen.tv.playback.TrailerStreamResolver
 import app.lumen.tv.data.livetv.Channel
 import app.lumen.tv.data.livetv.LiveTvRepository
@@ -60,6 +66,20 @@ data class PlayerUiState(
     val trailerUnavailable: Boolean = false,
     val liveChannel: Channel? = null,
     val liveGuide: List<Programme> = emptyList(),
+    val skip: Segment? = null,
+    val trickplay: Trickplay? = null,
+    val showStats: Boolean = false,
+)
+
+data class PlaybackStats(
+    val method: PlayMethod?,
+    val transcodeReasons: List<String>,
+    val container: String?,
+    val video: String?,
+    val audio: String?,
+    val bitrate: Int?,
+    val bufferSeconds: Long,
+    val droppedFrames: Int,
 )
 
 data class LiveRequest(val channelKey: String)
@@ -119,6 +139,11 @@ class PlayerViewModel(
     private var fellBackToTranscode = false
     private var stopped = false
     private var upNextJob: Job? = null
+    private var extras = PlaybackExtras()
+    private val skippedSegments = mutableSetOf<Segment>()
+    private var creditsHandled = false
+    private var autoSkip = false
+    private var droppedFrames = 0
 
     init {
         player.addListener(object : Player.Listener {
@@ -135,6 +160,17 @@ class PlayerViewModel(
 
             override fun onPlayerError(error: PlaybackException) = onError()
         })
+        player.addAnalyticsListener(object : AnalyticsListener {
+            override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, count: Int, elapsedMs: Long) {
+                droppedFrames += count
+            }
+        })
+        viewModelScope.launch {
+            while (isActive) {
+                delay(SEGMENT_CHECK_MS)
+                checkSegments()
+            }
+        }
         viewModelScope.launch {
             while (isActive) {
                 delay(PROGRESS_INTERVAL_MS)
@@ -211,11 +247,18 @@ class PlayerViewModel(
     }
 
     private fun start(id: UUID, ticks: Long, known: MediaItem? = null) {
-        _state.update { it.copy(loading = true, error = false, upNext = null, upNextSeconds = null, finished = false) }
+        _state.update { it.copy(loading = true, error = false, upNext = null, upNextSeconds = null, finished = false, skip = null, trickplay = null) }
+        extras = PlaybackExtras()
+        skippedSegments.clear()
+        creditsHandled = false
+        droppedFrames = 0
         viewModelScope.launch {
-            applySubtitleMode(settings.current().subtitles)
+            val current = settings.current()
+            autoSkip = current.autoSkipIntros
+            applySubtitleMode(current.subtitles)
             runCatching {
                 val item = known ?: repository.item(id)
+                item.seriesId?.let { series -> settings.trackChoice(series.toString())?.let(::applyTrackChoice) }
                 _state.update { it.copy(item = item, backdropUrl = item.backdropUrl) }
                 play(repository.resolve(item, ticks, forceTranscode = false), ticks)
             }.onFailure { _state.update { it.copy(loading = false, error = true) } }
@@ -250,6 +293,92 @@ class PlayerViewModel(
         player.play()
         _state.update { it.copy(method = resolved.method) }
         appScope.launch { repository.reportStart(resolved, ticks, paused = false) }
+        viewModelScope.launch {
+            val loaded = repository.extras(resolved)
+            if (source !== resolved) return@launch
+            extras = loaded
+            _state.update { it.copy(trickplay = loaded.trickplay) }
+        }
+    }
+
+    private fun checkSegments() {
+        if (live != null || trailer != null || source == null || _state.value.loading) return
+        val position = player.currentPosition
+        val active = extras.segments.firstOrNull { position >= it.startMs && position < it.endMs - SEGMENT_END_MARGIN_MS }
+        when {
+            active == null -> if (_state.value.skip?.type != SegmentType.Credits || _state.value.upNext != null) _state.update { it.copy(skip = null) }
+            active.type == SegmentType.Credits -> onCredits(active)
+            autoSkip && active !in skippedSegments -> {
+                skippedSegments += active
+                player.seekTo(active.endMs)
+            }
+            else -> _state.update { it.copy(skip = active) }
+        }
+    }
+
+    private fun onCredits(segment: Segment) {
+        if (creditsHandled) return
+        creditsHandled = true
+        val item = _state.value.item ?: return
+        if (item.kind != MediaKind.Episode) {
+            _state.update { it.copy(skip = segment) }
+            return
+        }
+        upNextJob = viewModelScope.launch {
+            val next = repository.nextEpisode(item)
+            if (next == null) _state.update { it.copy(skip = segment) } else countdown(next)
+        }
+    }
+
+    fun skipSegment() {
+        val segment = _state.value.skip ?: return
+        _state.update { it.copy(skip = null) }
+        if (segment.type == SegmentType.Credits) {
+            reportStopped(player.duration.coerceAtLeast(player.currentPosition) * TICKS_PER_MS)
+            player.pause()
+            _state.update { it.copy(finished = true) }
+        } else {
+            skippedSegments += segment
+            player.seekTo(segment.endMs)
+        }
+    }
+
+    private suspend fun countdown(next: MediaItem) {
+        for (seconds in UP_NEXT_SECONDS downTo 1) {
+            _state.update { it.copy(upNext = next, upNextSeconds = seconds, skip = null) }
+            delay(1_000)
+        }
+        playUpNext()
+    }
+
+    fun toggleStats() = _state.update { it.copy(showStats = !it.showStats) }
+
+    fun stats(): PlaybackStats {
+        val video = player.videoFormat
+        val audio = player.audioFormat
+        return PlaybackStats(
+            method = source?.method,
+            transcodeReasons = source?.transcodeReasons.orEmpty(),
+            container = source?.container,
+            video = video?.let {
+                listOfNotNull(
+                    it.codecs ?: it.sampleMimeType?.substringAfter('/'),
+                    if (it.width > 0) "${it.width}×${it.height}" else null,
+                    it.frameRate.takeIf { rate -> rate > 0 }?.let { rate -> "%.3g fps".format(rate) },
+                ).joinToString(" · ")
+            },
+            audio = audio?.let {
+                listOfNotNull(
+                    it.codecs ?: it.sampleMimeType?.substringAfter('/'),
+                    it.channelCount.takeIf { count -> count > 0 }?.let { count -> "$count ch" },
+                    it.sampleRate.takeIf { rate -> rate > 0 }?.let { rate -> "${rate / 1000} kHz" },
+                    it.language,
+                ).joinToString(" · ")
+            },
+            bitrate = (video?.bitrate?.takeIf { it > 0 } ?: 0) + (audio?.bitrate?.takeIf { it > 0 } ?: 0),
+            bufferSeconds = ((player.bufferedPosition - player.currentPosition) / 1000).coerceAtLeast(0),
+            droppedFrames = droppedFrames,
+        )
     }
 
     private fun onError() {
@@ -287,30 +416,29 @@ class PlayerViewModel(
             _state.update { it.copy(finished = true) }
             return
         }
+        if (upNextJob?.isActive == true) return
         upNextJob = viewModelScope.launch {
             val next = repository.nextEpisode(item)
             if (next == null) {
                 _state.update { it.copy(finished = true) }
                 return@launch
             }
-            for (seconds in UP_NEXT_SECONDS downTo 1) {
-                _state.update { it.copy(upNext = next, upNextSeconds = seconds) }
-                delay(1_000)
-            }
-            playUpNext()
+            countdown(next)
         }
     }
 
     fun playUpNext() {
         val next = _state.value.upNext ?: return
         upNextJob?.cancel()
+        if (!stopped) reportStopped(player.currentPosition * TICKS_PER_MS)
         fellBackToTranscode = false
         start(next.id, 0L, next)
     }
 
     fun cancelUpNext() {
         upNextJob?.cancel()
-        _state.update { it.copy(upNext = null, upNextSeconds = null, finished = true) }
+        val ended = player.playbackState == Player.STATE_ENDED
+        _state.update { it.copy(upNext = null, upNextSeconds = null, finished = ended) }
     }
 
     fun togglePlayPause() {
@@ -336,12 +464,36 @@ class PlayerViewModel(
             .setTrackTypeDisabled(group.type, false)
             .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, option.trackIndex))
             .build()
+        val language = option.format.language
+        when (group.type) {
+            C.TRACK_TYPE_AUDIO -> rememberChoice { it.copy(audioLanguage = language ?: it.audioLanguage) }
+            C.TRACK_TYPE_TEXT -> rememberChoice { it.copy(subtitleLanguage = language, subtitlesOff = false) }
+        }
     }
 
     fun disableSubtitles() {
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .build()
+        rememberChoice { it.copy(subtitlesOff = true) }
+    }
+
+    private fun rememberChoice(transform: (TrackChoice) -> TrackChoice) {
+        val series = _state.value.item?.seriesId ?: return
+        appScope.launch { settings.saveTrackChoice(series.toString(), transform) }
+    }
+
+    private fun applyTrackChoice(choice: TrackChoice) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+            choice.audioLanguage?.let(::setPreferredAudioLanguage)
+            when {
+                choice.subtitlesOff -> setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                choice.subtitleLanguage != null -> {
+                    setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    setPreferredTextLanguage(choice.subtitleLanguage)
+                }
+            }
+        }.build()
     }
 
     private fun applySubtitleMode(mode: SubtitleMode) {
@@ -393,5 +545,7 @@ class PlayerViewModel(
         const val SEEK_STEP_MS = 10_000L
         const val PROGRESS_INTERVAL_MS = 10_000L
         const val UP_NEXT_SECONDS = 10
+        const val SEGMENT_CHECK_MS = 500L
+        const val SEGMENT_END_MARGIN_MS = 1_000L
     }
 }

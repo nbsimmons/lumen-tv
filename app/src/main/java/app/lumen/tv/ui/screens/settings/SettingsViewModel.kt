@@ -114,6 +114,8 @@ class SettingsViewModel(
         store.setQuality(all[(all.indexOf(state.value.settings.quality) + 1) % all.size])
     }
 
+    fun toggleAutoSkip() = viewModelScope.launch { store.setAutoSkipIntros(!state.value.settings.autoSkipIntros) }
+
     fun toggleSearchKeyboard() = viewModelScope.launch {
         val next = if (state.value.settings.searchKeyboard == SearchKeyboard.System) SearchKeyboard.OneLine else SearchKeyboard.System
         store.setSearchKeyboard(next)

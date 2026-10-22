@@ -3,6 +3,7 @@ package app.lumen.tv.data.settings
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -12,7 +13,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import app.lumen.tv.data.model.RecentView
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
 enum class StreamingQuality(val bitrate: Int) {
@@ -31,7 +35,11 @@ data class LumenSettings(
     val quality: StreamingQuality = StreamingQuality.Auto,
     val subtitles: SubtitleMode = SubtitleMode.ForcedOnly,
     val searchKeyboard: SearchKeyboard = SearchKeyboard.System,
+    val autoSkipIntros: Boolean = false,
 )
+
+@Serializable
+data class TrackChoice(val audioLanguage: String? = null, val subtitleLanguage: String? = null, val subtitlesOff: Boolean = false)
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -43,6 +51,7 @@ class SettingsStore(context: Context) {
             quality = prefs[QUALITY]?.let { saved -> StreamingQuality.entries.firstOrNull { it.bitrate == saved } } ?: StreamingQuality.Auto,
             subtitles = prefs[SUBTITLES]?.let { saved -> SubtitleMode.entries.firstOrNull { it.name == saved } } ?: SubtitleMode.ForcedOnly,
             searchKeyboard = prefs[SEARCH_KEYBOARD]?.let { saved -> SearchKeyboard.entries.firstOrNull { it.name == saved } } ?: SearchKeyboard.System,
+            autoSkipIntros = prefs[AUTO_SKIP_INTROS] ?: false,
         )
     }
 
@@ -101,6 +110,25 @@ class SettingsStore(context: Context) {
         store.edit { it[QUALITY] = quality.bitrate }
     }
 
+    suspend fun setAutoSkipIntros(enabled: Boolean) {
+        store.edit { it[AUTO_SKIP_INTROS] = enabled }
+    }
+
+    suspend fun trackChoice(seriesId: String): TrackChoice? = decodeChoices(store.data.first()[TRACK_CHOICES])[seriesId]
+
+    suspend fun saveTrackChoice(seriesId: String, transform: (TrackChoice) -> TrackChoice) {
+        store.edit { prefs ->
+            val choices = LinkedHashMap(decodeChoices(prefs[TRACK_CHOICES]))
+            val next = transform(choices.remove(seriesId) ?: TrackChoice())
+            choices[seriesId] = next
+            val trimmed = choices.entries.toList().takeLast(MAX_TRACK_CHOICES).associate { it.key to it.value }
+            prefs[TRACK_CHOICES] = Json.encodeToString(CHOICES_SERIALIZER, trimmed)
+        }
+    }
+
+    private fun decodeChoices(raw: String?): Map<String, TrackChoice> =
+        raw?.let { runCatching { json.decodeFromString(CHOICES_SERIALIZER, it) }.getOrNull() }.orEmpty()
+
     suspend fun setSearchKeyboard(keyboard: SearchKeyboard) {
         store.edit { it[SEARCH_KEYBOARD] = keyboard.name }
     }
@@ -113,6 +141,10 @@ class SettingsStore(context: Context) {
         val QUALITY = intPreferencesKey("max_bitrate")
         val SUBTITLES = stringPreferencesKey("subtitle_mode")
         val SEARCH_KEYBOARD = stringPreferencesKey("search_keyboard")
+        val AUTO_SKIP_INTROS = booleanPreferencesKey("auto_skip_intros")
+        val TRACK_CHOICES = stringPreferencesKey("series_track_choices")
+        val CHOICES_SERIALIZER = MapSerializer(String.serializer(), TrackChoice.serializer())
+        const val MAX_TRACK_CHOICES = 200
         val RECENT = stringPreferencesKey("recent_searches")
         val RECENT_VIEWS = stringPreferencesKey("recently_viewed")
         val VIEWS_SERIALIZER = ListSerializer(RecentView.serializer())
